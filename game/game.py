@@ -66,7 +66,7 @@ class Player:
     max_prob, idx = self._get_highest_probability_call(cda_mat)
     return {'dice': idx[0]+1, 'quantity': idx[1]+1, 'bs': False}
 
-  def action(self, prev_action=None):
+  def action(self, prev_action=None, plot=False):
     if prev_action == None:
       return self.first_action()
 
@@ -100,9 +100,11 @@ class Player:
       cda_mat[0,:ceil(q/2) - 1] = -1.0
 
     if self.verbose:
-      plot_distributions(cond_distributions=self.conditional_dist,
-                         player_id=self.playerID)
       print('Probabilities: {}'.format(cda_mat))
+      if plot:
+        plot_distributions(cond_distributions=self.conditional_dist,
+                         player_id=self.playerID)
+
 
     # find highest probability call
     max_prob, idx = self._get_highest_probability_call(cda_mat)
@@ -288,7 +290,7 @@ if __name__ == '__main__':
     winners = []
     max_games = 1
     for i, games in enumerate(range(max_games)):
-      gameWin = runGame(verbose=1)
+      gameWin = runGame(verbose=0)
       print(f'({i + 1}/{max_games}) PLAYER {gameWin} WINS')
 
       winners.append(gameWin)
