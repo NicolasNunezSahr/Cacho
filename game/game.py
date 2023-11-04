@@ -140,10 +140,15 @@ def get_conditional_distributions(player_hand: List[int], num_dice_unseen: int =
   counts_of_numbers = Counter(player_hand)
   conditional_distributions_list_of_lists = []
   for number in range(1, DICE_SIDES + 1):
+    # count quantity of dice in hand
     if number in list(counts_of_numbers.keys()):
       count_in_hand = counts_of_numbers[number]
     else:
       count_in_hand = 0
+
+    # Include aces in the count for non-aces
+    if number != 1 and 1 in list(counts_of_numbers.keys()):
+        count_in_hand += counts_of_numbers[1]
 
     # Aces are wild
     if number == 1:
