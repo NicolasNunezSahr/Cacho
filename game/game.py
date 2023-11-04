@@ -66,7 +66,7 @@ class Player:
     max_prob, idx = self._get_highest_probability_call(cda_mat)
     return {'dice': idx[0]+1, 'quantity': idx[1]+1, 'bs': False}
 
-  def action(self, prev_action=None, plot=False):
+  def action(self, prev_action=None, plot=True):
     if prev_action == None:
       return self.first_action()
 
@@ -295,7 +295,7 @@ if __name__ == '__main__':
     winners = []
     max_games = 1
     for i, games in enumerate(range(max_games)):
-      gameWin = runGame(verbose=0)
+      gameWin = runGame(verbose=1)
       print(f'({i + 1}/{max_games}) PLAYER {gameWin} WINS')
 
       winners.append(gameWin)
