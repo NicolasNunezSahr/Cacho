@@ -66,7 +66,7 @@ class Player:
     max_prob, idx = self._get_highest_probability_call(cda_mat)
     return {'dice': idx[0]+1, 'quantity': idx[1]+1, 'bs': False}
 
-  def action(self, prev_action=None):
+  def action(self, prev_action=None, plot=True):
     if prev_action == None:
       return self.first_action()
 
@@ -100,9 +100,11 @@ class Player:
       cda_mat[0,:ceil(q/2) - 1] = -1.0
 
     if self.verbose:
-      plot_distributions(cond_distributions=self.conditional_dist,
-                         player_id=self.playerID)
       print('Probabilities: {}'.format(cda_mat))
+      if plot:
+        plot_distributions(cond_distributions=self.conditional_dist,
+                         player_id=self.playerID)
+
 
     # find highest probability call
     max_prob, idx = self._get_highest_probability_call(cda_mat)
@@ -138,10 +140,15 @@ def get_conditional_distributions(player_hand: List[int], num_dice_unseen: int =
   counts_of_numbers = Counter(player_hand)
   conditional_distributions_list_of_lists = []
   for number in range(1, DICE_SIDES + 1):
+    # count quantity of dice in hand
     if number in list(counts_of_numbers.keys()):
       count_in_hand = counts_of_numbers[number]
     else:
       count_in_hand = 0
+
+    # Include aces in the count for non-aces
+    if number != 1 and 1 in list(counts_of_numbers.keys()):
+        count_in_hand += counts_of_numbers[1]
 
     # Aces are wild
     if number == 1:
