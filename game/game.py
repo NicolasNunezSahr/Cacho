@@ -8,6 +8,7 @@ from collections import Counter
 from typing import List
 from scipy.stats import binom
 import matplotlib.pyplot as plt
+import sys
 
 # Set global variables
 NUM_PLAYERS = 3
@@ -27,7 +28,7 @@ print(f'Player\'s hand: {player_hand}')
 
 class Player:
   def __init__(self, hand: List[int], risk_thres: float, likely_thres: float,
-               playerID: int, verbose: int = 0):
+                exactly_thres: float, playerID: int, num_dice_unseen: int, verbose: int = 0):
     """
     Players have a hand, which is a list of dice values, which vary between
     1 and DICE_SIDES i.e. 6. If the conditional probability of a callable bet
@@ -43,16 +44,26 @@ class Player:
     self.hand = hand
     self.risk_thres = risk_thres
     self.likely_thres = likely_thres
+    self.exactly_thres = exactly_thres
     self.playerID = playerID
+    self.num_dice_unseen = num_dice_unseen
+    self.num_dice_in_game = num_dice_unseen + len(self.hand)
     self.conditional_dist = None
-    self.num_dice_unseen = None
-    self.num_dice_in_game = None
+    self.exactly_dist = None
+
+    self.calculate_cond_dist(num_dice_unseen)
+    self.calculate_exactly_dist(num_dice_unseen)
 
   def calculate_cond_dist(self, num_dice_unseen):
     c = get_conditional_distributions(self.hand, num_dice_unseen)
     self.conditional_dist = np.array(c)
     self.num_dice_unseen = num_dice_unseen
     self.num_dice_in_game = num_dice_unseen + len(self.hand)
+
+
+  def calculate_exactly_dist(self, num_dice_unseen):
+    e = get_exactly_distributions(self.hand, num_dice_unseen)
+    self.exactly_dist = np.array(e)
 
   def _get_highest_probability_call(self, m):
     max_prob = np.max(m)
@@ -64,9 +75,9 @@ class Player:
   def first_action(self):
     cda_mat = self.conditional_dist[:,1:].copy()
     max_prob, idx = self._get_highest_probability_call(cda_mat)
-    return {'dice': idx[0]+1, 'quantity': idx[1]+1, 'bs': False}
+    return {'quantity': idx[1]+1, 'dice': idx[0]+1, 'bs': False, 'exactly': False}
 
-  def action(self, prev_action=None, plot=True):
+  def action(self, prev_action=None, plot=False):
     if prev_action == None:
       return self.first_action()
 
@@ -74,6 +85,7 @@ class Player:
     d = prev_action['dice']
     q = prev_action['quantity']
     cda_mat = self.conditional_dist[:,1:].copy() # remove at least 0 col
+    exa_prob = self.exactly_dist[d-1, q] # no column removal
 
     if d == 1:
       # here I removed , self.num_dice_in_game, this means if there are only a couple die
@@ -99,7 +111,7 @@ class Player:
       # Zero out unallowed ace calls
       cda_mat[0,:ceil(q/2) - 1] = -1.0
 
-    if self.verbose:
+    if self.verbose > 1:
       print('Probabilities: {}'.format(cda_mat))
       if plot:
         plot_distributions(cond_distributions=self.conditional_dist,
@@ -109,9 +121,10 @@ class Player:
     # find highest probability call
     max_prob, idx = self._get_highest_probability_call(cda_mat)
     if max_prob <= 0:  # If highest probability play is 0.0, must call bullshit
-      return {'bs': True, 'dice': d, 'quantity': q}
+      return {'quantity': q, 'dice': d, 'bs': True, 'exactly': False}
     else:
-      best_action = {'dice': idx[0]+1, 'quantity': idx[1]+1, 'bs': False}
+      print(f'Probability of at least {idx[1]+1} {idx[0]+1}\'s: {max_prob}')
+      best_action = {'quantity': idx[1]+1, 'dice': idx[0]+1, 'bs': False, 'exactly': False}
 
     # evaluate against likely threshold
     if max_prob > self.likely_thres:
@@ -119,10 +132,19 @@ class Player:
 
     # check risk threshold
     prob_prev_action = self.conditional_dist[d - 1][q]
+    prob_bullshit_wins = 1 - prob_prev_action
     if prob_prev_action < self.risk_thres:
-      print(f'Checking risk: P({q} {d}s) = {prob_prev_action} < {self.risk_thres} -> BS')
-      return {'bs': True, 'dice':d, 'quantity':q}
-    print(f'Checking risk: P({q} {d}s) = {prob_prev_action} > {self.risk_thres} -> RAISE')
+      if self.verbose:
+        print(f'Probability of at least {q} {d}\'s = {prob_prev_action} < {self.risk_thres} -> BS')
+      return {'bs': True, 'dice':d, 'quantity':q, 'exactly': False}
+    print(f'Probability of at least {q} {d}\'s = {prob_prev_action} > {self.risk_thres} -> RAISE')
+
+    # Exactly only an option if number of dice left is at least half of what you started with
+    # Call exactly if probability is above threshold, or if its more likely than best action
+    if self.num_dice_in_game >= (MAX_TOTAL_DICE / 2):
+      print(f'Probability of exactly {q} {d}\'s: {exa_prob}')
+      if exa_prob > self.exactly_thres or (exa_prob > max_prob):
+        return {'quantity': q, 'dice': d, 'bs': False, 'exactly': True}
 
     # else, make highest probability call
     return best_action
@@ -180,6 +202,57 @@ def get_conditional_distributions(player_hand: List[int], num_dice_unseen: int =
 
   return conditional_distributions_list_of_lists
 
+def get_exactly_distributions(player_hand: List[int], num_dice_unseen: int = 15):
+  """
+  Given this player's hand and the number of unseen dice, return a list of
+  length equal to the number of sides of a die (i.e. 6), where each of these
+  lists contains the probabilities of seeing a count of exactly X in the game.
+
+  Usage: get_exactly_distributions(player_hand = [5, 2, 3, 4, 3], num_dice_unseen = 10)
+
+  """
+  counts_of_numbers = Counter(player_hand)
+  conditional_exactly_distributions_list_of_lists = []
+  for number in range(1, DICE_SIDES + 1):
+    # count quantity of dice in hand
+    if number in list(counts_of_numbers.keys()):
+      count_in_hand = counts_of_numbers[number]
+    else:
+      count_in_hand = 0
+
+    # Include aces in the count for non-aces
+    if number != 1 and 1 in list(counts_of_numbers.keys()):
+        count_in_hand += counts_of_numbers[1]
+
+    # Aces are wild
+    if number == 1:
+      number_prob = 1/6
+    else:
+      number_prob = 1/3
+
+    # These are the unconditional probabilities of the unseen dice
+    unconditional_exactly_probabilities = [binom.pmf(n=num_dice_unseen, p=number_prob, k = x) \
+          for x in range(0, num_dice_unseen + 1)]
+
+    # print(f'unseen probs: {len(unconditional_exactly_probabilities)} -> {unconditional_exactly_probabilities}')
+    # Initialize conditional exactly probability to 0.0 for anything less than what you have in your hand,
+    # 1.0 for what you have in your hand,
+    #   initialize to -1.0 for those not in your hand (to easily spot an error),
+    #   and initialize to 0.0 those that remain, so that the domain is
+    #   num_dice_unseen + len(player_hand) (i.e. 15 + 5 = 20)
+    conditional_exactly_probabilities = [0] * (count_in_hand) + \
+    [-1.0] * len(unconditional_exactly_probabilities) + [0.0] * (len(player_hand) - count_in_hand)
+    for i, prob in enumerate(unconditional_exactly_probabilities):
+      if i > num_dice_unseen + len(player_hand):
+        break
+      conditional_exactly_probabilities[i + count_in_hand] = unconditional_exactly_probabilities[i]
+
+    conditional_exactly_distributions_list_of_lists.append(conditional_exactly_probabilities)
+
+    # print(f'cond probs: {len(conditional_probabilities)} -> {conditional_probabilities}')
+
+  return conditional_exactly_distributions_list_of_lists
+
 
 def plot_distributions(cond_distributions: List[List[float]], player_id: int = 0):
   """
@@ -206,55 +279,64 @@ def plot_distributions(cond_distributions: List[List[float]], player_id: int = 0
 
 def runGame(verbose: int = 0):
   # instantiate players
-  r = 0.45  # risk threshold
+  r = 0.37  # risk / bullshit threshold
   l = 0.8  # likely threshold
+  e = 0.4  # exactly threshold
   player_list = []
   total_dice_left = MAX_TOTAL_DICE
 
   for i in range(NUM_PLAYERS):
     h = np.random.randint(1, DICE_SIDES + 1, MAX_DICE_PER_PLAYER)
-    p = Player(hand = h, risk_thres = r, likely_thres = l, playerID= i + 1,
-               verbose = verbose)  # Every player has same likely and risk threshs
-    p.calculate_cond_dist(total_dice_left - p.hand.size)
+    p = Player(hand = h, risk_thres = r, likely_thres = l, exactly_thres = e, playerID= i + 1,
+                num_dice_unseen = total_dice_left - h.size, verbose = verbose)  # Every player has same likely and risk threshs
     player_list.append(p)
+    print(f'Player {p.playerID}: {p.hand} -> exactly probs: {p.exactly_dist}')
 
   round = 0
   while(len(player_list) > 1):
     round = round + 1
     if verbose:
-      print("-----------------------------------------------------------------")
+      print("---------------------------------------------------------------------------------------------------")
       print("ROUND " + str(round))
       for player in player_list:
-        print(f'{player.hand}, {player.num_dice_unseen} unseen dice')
+        print(f'Player #{player.playerID}: {player.hand}, {player.num_dice_unseen} unseen dice')
     # simulate one round
     i = 0
     prev_a = None
-    bs = False
-    bug = False
+    end_round = False
 
-    while bs == False:
+    while end_round == False:
       # Use % to loop i.e.:
       # player = player_list[i % len(player_list)]
       for index, player in enumerate(player_list):
         previous_index = (index - 1) if index > 0 else len(player_list) - 1
         index_current = index
 
+        if verbose:
+          print(f'\nPlayer ID: {player.playerID}')
+
         a = player.action(prev_a)
         last_play = prev_a
         prev_a = a
 
-        i += 1
         if verbose:
-          print("Player ID: " + str(player.playerID))
           print('turn {}: {}'.format(i, a))
+
+        i += 1
+
         # user_enter = input('Enter to continue: ')
         if a['bs'] == True:
-          bs = True
+          end_round = True
           last_play = a
           bullshit_caller_player_list_index = index
           break
+        if a['exactly'] == True:
+          end_round = True
+          last_play = a
+          exactly_caller_player_list_index = index
+          break
 
-      bs = a['bs']
+      end_round = a['bs'] | a['exactly']
 
 
     # when bullshit is called count the player hands to determine the outcomes
@@ -262,23 +344,46 @@ def runGame(verbose: int = 0):
     # figure out last hand
     # then count
 
-    count = 0
-    dice_counts = Counter([number for player in player_list for number in player.hand])
-    total_count = int(dice_counts[1]) if last_play['dice'] == 1 else (dice_counts[last_play['dice']]) + int(dice_counts[1])
-    player_bullshit_called_on = player_list[(bullshit_caller_player_list_index - 1) % len(player_list)]
+    if last_play['bs']:
+        count = 0
+        dice_counts = Counter([number for player in player_list for number in player.hand])
+        total_count = int(dice_counts[1]) if last_play['dice'] == 1 else (dice_counts[last_play['dice']]) + int(dice_counts[1])
+        player_bullshit_called_on = player_list[(bullshit_caller_player_list_index - 1) % len(player_list)]
 
-    if total_count < last_play['quantity'] and player_bullshit_called_on != None:
-      player_list[previous_index].hand = player_list[previous_index].hand[1:]
-      if verbose:
-        print(f'{total_count} {last_play["dice"]}s total < Player {previous_index + 1}\'s bet of {last_play["quantity"]} {last_play["dice"]}s')
-        print("Player " + str(previous_index + 1) + " loses a die")
-      total_dice_left = total_dice_left - 1
-    elif total_count >= last_play['quantity'] and player_bullshit_called_on != None:
-      player_list[index_current].hand = player_list[index_current].hand[1:]
-      if verbose:
-        print(f'{total_count} {last_play["dice"]}s total >= Player {previous_index + 1}\'s bet of {last_play["quantity"]} {last_play["dice"]}s')
-        print("Player " + str(index_current + 1) + " loses a die")
-      total_dice_left = total_dice_left - 1
+        if total_count < last_play['quantity'] and player_bullshit_called_on != None:
+          player_list[previous_index].hand = player_list[previous_index].hand[1:]
+          if verbose:
+            print(f'{total_count} {last_play["dice"]}s total < Player {previous_index + 1}\'s bet of {last_play["quantity"]} {last_play["dice"]}s')
+            print("Player " + str(previous_index + 1) + " loses a die")
+          total_dice_left = total_dice_left - 1
+        elif total_count >= last_play['quantity'] and player_bullshit_called_on != None:
+          player_list[index_current].hand = player_list[index_current].hand[1:]
+          if verbose:
+            print(f'{total_count} {last_play["dice"]}s total >= Player {previous_index + 1}\'s bet of {last_play["quantity"]} {last_play["dice"]}s')
+            print("Player " + str(index_current + 1) + " loses a die")
+          total_dice_left = total_dice_left - 1
+    elif last_play['exactly']:
+        count = 0
+        dice_counts = Counter([number for player in player_list for number in player.hand])
+        total_count = int(dice_counts[1]) if last_play['dice'] == 1 else (dice_counts[last_play['dice']]) + int(dice_counts[1])
+
+        if total_count == last_play['quantity']:
+            if len(player_list[index_current].hand) < 5:
+                player_list[index_current].hand = np.append(player_list[index_current].hand, 0)  # Add a die
+                total_dice_left = total_dice_left + 1
+                if verbose:
+                  print(f'{total_count} {last_play["dice"]}s total == Player {previous_index + 1}\'s exactly bet of {last_play["quantity"]} {last_play["dice"]}s')
+                  print("Player " + str(index_current + 1) + " wins a die")
+            elif verbose:
+                print('Player has 5 die so didn\'t gain a die')
+        else:
+            player_list[index_current].hand = player_list[index_current].hand[1:]  # Remove a die
+            total_dice_left = total_dice_left - 1
+            if verbose:
+              print(f'{total_count} {last_play["dice"]}s total != Player {previous_index + 1}\'s exactly bet of {last_play["quantity"]} {last_play["dice"]}s')
+              print("Player " + str(index_current + 1) + " loses a die")
+
+
     ##################################################
     player_list = [player for player in player_list if player.hand.size > 0]
 
