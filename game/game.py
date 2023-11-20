@@ -382,7 +382,6 @@ def runGame(verbose: int = 0):
             if verbose:
               print(f'{total_count} {last_play["dice"]}s total != Player {previous_index + 1}\'s exactly bet of {last_play["quantity"]} {last_play["dice"]}s')
               print("Player " + str(index_current + 1) + " loses a die")
-        input('Exactly: Click ENTER')
 
 
     ##################################################
@@ -399,7 +398,7 @@ def runGame(verbose: int = 0):
 
 if __name__ == '__main__':
     winners = []
-    max_games = 10
+    max_games = 1
     for i, games in enumerate(range(max_games)):
       gameWin = runGame(verbose=1)
       print(f'({i + 1}/{max_games}) PLAYER {gameWin} WINS')
