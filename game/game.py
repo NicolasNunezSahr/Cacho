@@ -28,7 +28,8 @@ print(f'Player\'s hand: {player_hand}')
 
 class Player:
   def __init__(self, hand: List[int], risk_thres: float, likely_thres: float,
-                exactly_thres: float, playerID: int, num_dice_unseen: int, verbose: int = 0):
+                exactly_thres: float, bluff_thres: float, bluff_prob: float,
+                playerID: int, num_dice_unseen: int, verbose: int = 0):
     """
     Players have a hand, which is a list of dice values, which vary between
     1 and DICE_SIDES i.e. 6. If the conditional probability of a callable bet
@@ -37,14 +38,18 @@ class Player:
     bullshit on the received bet. A player only calls bullshit if the
     conditional probability of the received bet is less than risk_thresh.
     If the received bet has probability larger than risk_thresh, then the player
-    raises the bet to the next callable bet that has highest conditional
-    probability.
+    either: (A) raises the bet to the next callable bet that has highest conditional
+    probability, OR (B) calls 'exactly' if the conditional probability of 'exactly' is higher than the
+    conditional probability of the highest bet, OR (C) with some probability bluff_prob, bets a bluff,
+    which is a call with conditional probability at least bluff_thres.
     """
     self.verbose = verbose
     self.hand = hand
     self.risk_thres = risk_thres
     self.likely_thres = likely_thres
     self.exactly_thres = exactly_thres
+    self.bluff_thres = bluff_thres
+    self.bluff_prob = bluff_prob
     self.playerID = playerID
     self.num_dice_unseen = num_dice_unseen
     self.num_dice_in_game = num_dice_unseen + len(self.hand)
@@ -60,7 +65,6 @@ class Player:
     self.num_dice_unseen = num_dice_unseen
     self.num_dice_in_game = num_dice_unseen + len(self.hand)
 
-
   def calculate_exactly_dist(self, num_dice_unseen):
     e = get_exactly_distributions(self.hand, num_dice_unseen)
     self.exactly_dist = np.array(e)
@@ -71,6 +75,24 @@ class Player:
     idx_flat = np.argmax(m)
     idx = np.unravel_index(idx_flat, m.shape)
     return max_prob, idx
+
+  def _get_bluff_call(self, m):
+    # zero out highest probability call
+    max_prob, idx = self._get_highest_probability_call(m)
+    m[idx[0], idx[1]] = 0
+
+    # zero out calls that don't pass bluff threshold
+    mask = m > self.bluff_thres
+    candidate_indices = np.where(mask)
+    combined_indices = list(zip(candidate_indices[0], candidate_indices[1]))
+
+    if len(combined_indices) == 0:
+      return None, None
+
+    # pick out a call at random
+    bluff_idx = random.choice(combined_indices)
+    bluff_prob = m[bluff_idx[0], bluff_idx[1]]
+    return bluff_prob, bluff_idx
 
   def first_action(self):
     cda_mat = self.conditional_dist[:,1:].copy()
@@ -117,6 +139,14 @@ class Player:
         plot_distributions(cond_distributions=self.conditional_dist,
                          player_id=self.playerID)
 
+    # decide on whether or not to bluff (random)
+    decide_bluff = np.random.binomial(n=1,p=self.bluff_prob, size=1)[0]
+    if decide_bluff == 1:
+      bluff_prob, b_idx = self._get_bluff_call(cda_mat)
+      if b_idx:
+        print(f'Bluff: Probability of at least {b_idx[1]+1} {b_idx[0]+1}\'s: {bluff_prob}')
+        bluff_action = {'quantity': b_idx[1]+1, 'dice': b_idx[0]+1, 'bs': False, 'exactly': False}
+        return bluff_action
 
     # find highest probability call
     max_prob, idx = self._get_highest_probability_call(cda_mat)
@@ -282,15 +312,17 @@ def runGame(verbose: int = 0):
   r = 0.37  # risk / bullshit threshold
   l = 0.8  # likely threshold
   e = 0.4  # exactly threshold
+  bt = 0.37 # bluff threshold
+  bp = 0.2 # bluff probability
   player_list = []
   total_dice_left = MAX_TOTAL_DICE
 
   for i in range(NUM_PLAYERS):
     h = np.random.randint(1, DICE_SIDES + 1, MAX_DICE_PER_PLAYER)
-    p = Player(hand = h, risk_thres = r, likely_thres = l, exactly_thres = e, playerID= i + 1,
-                num_dice_unseen = total_dice_left - h.size, verbose = verbose)  # Every player has same likely and risk threshs
+    # Every player has same params
+    p = Player(hand = h, risk_thres = r, likely_thres = l, exactly_thres = e, bluff_prob = bp, bluff_thres = bt,
+                playerID= i + 1, num_dice_unseen = total_dice_left - h.size, verbose = verbose)
     player_list.append(p)
-    print(f'Player {p.playerID}: {p.hand} -> exactly probs: {p.exactly_dist}')
 
   round = 0
   while(len(player_list) > 1):
