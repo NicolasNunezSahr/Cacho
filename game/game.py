@@ -2,16 +2,18 @@ import random
 import numpy as np
 
 from math import ceil
-from collections import Counter
 
 from collections import Counter
 from typing import List
 from scipy.stats import binom
 import matplotlib.pyplot as plt
 import sys
+import time
 
 # Set global variables
-NUM_PLAYERS = 3
+NUM_HUMANS = 1
+NUM_BOTS = 3
+NUM_PLAYERS = NUM_HUMANS + NUM_BOTS
 MAX_DICE_PER_PLAYER = 5
 MAX_TOTAL_DICE = NUM_PLAYERS * MAX_DICE_PER_PLAYER
 DICE_SIDES = 6
@@ -22,8 +24,6 @@ player_dice_left = MAX_DICE_PER_PLAYER
 total_dice_left = MAX_TOTAL_DICE
 unseen_dice_left = total_dice_left - player_dice_left  # 20 total dice of which 5 dice are seen and the rest unseen
 player_hand = sorted([random.randint(1, DICE_SIDES) for x in range(player_dice_left)])
-
-print(f'Player\'s hand: {player_hand}')
 
 
 class Player:
@@ -51,6 +51,7 @@ class Player:
     self.bluff_thres = bluff_thres
     self.bluff_prob = bluff_prob
     self.playerID = playerID
+    self.player_type = 'Bot'
     self.num_dice_unseen = num_dice_unseen
     self.num_dice_in_game = num_dice_unseen + len(self.hand)
     self.conditional_dist = None
@@ -144,7 +145,8 @@ class Player:
     if decide_bluff == 1:
       bluff_prob, b_idx = self._get_bluff_call(cda_mat)
       if b_idx:
-        print(f'Bluff: Probability of at least {b_idx[1]+1} {b_idx[0]+1}\'s: {bluff_prob}')
+        if self.verbose:
+          print(f'Bluff: Probability of at least {b_idx[1]+1} {b_idx[0]+1}\'s: {bluff_prob}')
         bluff_action = {'quantity': b_idx[1]+1, 'dice': b_idx[0]+1, 'bs': False, 'exactly': False}
         return bluff_action
 
@@ -153,7 +155,8 @@ class Player:
     if max_prob <= 0:  # If highest probability play is 0.0, must call bullshit
       return {'quantity': q, 'dice': d, 'bs': True, 'exactly': False}
     else:
-      print(f'Probability of at least {idx[1]+1} {idx[0]+1}\'s: {max_prob}')
+      if self.verbose:
+          print(f'Probability of at least {idx[1]+1} {idx[0]+1}\'s: {max_prob}')
       best_action = {'quantity': idx[1]+1, 'dice': idx[0]+1, 'bs': False, 'exactly': False}
 
     # evaluate against likely threshold
@@ -167,17 +170,76 @@ class Player:
       if self.verbose:
         print(f'Probability of at least {q} {d}\'s = {prob_prev_action} < {self.risk_thres} -> BS')
       return {'bs': True, 'dice':d, 'quantity':q, 'exactly': False}
-    print(f'Probability of at least {q} {d}\'s = {prob_prev_action} > {self.risk_thres} -> RAISE')
+    if self.verbose:
+      print(f'Probability of at least {q} {d}\'s = {prob_prev_action} > {self.risk_thres} -> RAISE')
 
     # Exactly only an option if number of dice left is at least half of what you started with
     # Call exactly if probability is above threshold, or if its more likely than best action
     if self.num_dice_in_game >= (MAX_TOTAL_DICE / 2):
-      print(f'Probability of exactly {q} {d}\'s: {exa_prob}')
+      if self.verbose:
+        print(f'Probability of exactly {q} {d}\'s: {exa_prob}')
       if exa_prob > self.exactly_thres or (exa_prob > max_prob):
         return {'quantity': q, 'dice': d, 'bs': False, 'exactly': True}
 
     # else, make highest probability call
     return best_action
+
+class HumanPlayer(Player):
+  def __init__(self, hand: List[int], playerID: int, num_dice_unseen: int, verbose: int = 0):
+    """
+    Humans have a hand.
+    """
+    self.playerID = playerID
+    self.hand = hand
+    self.num_dice_unseen = num_dice_unseen
+    self.player_type = 'Human'
+
+    self.calculate_cond_dist(num_dice_unseen)
+    self.calculate_exactly_dist(num_dice_unseen)
+
+  def action(self, prev_action=None, plot=False):
+    if plot:
+      plot_distributions(cond_distributions=self.conditional_dist,
+                           player_id=self.playerID)
+    invalid_call = True
+    while invalid_call:
+        player_call = input('Play Format: \{quantity\} \{number\} OR \'bs\' OR \'exactly\':    ')
+        if prev_action is not None:
+          if player_call == 'bs':
+            invalid_call = False
+            action = prev_action.update({'bs': True})
+          elif player_call == 'exactly':
+            invalid_call = False
+            action = prev_action.update({'exactly': True})
+          elif len([int(i) for i in player_call.split() if i.isdigit()]) == 2:  # RAISE
+            raise_call = [int(i) for i in player_call.split() if i.isdigit()]
+            quantity = raise_call[0]
+            dice = raise_call[1]
+            print('raise call {}'.format(raise_call))
+            if prev_action['dice'] == 1:
+              if dice == 1 and quantity > prev_action['quantity']:
+                  invalid_call = False
+              elif 2 <= dice <= 6 and quantity >= 2*prev_action['quantity'] + 1:
+                  invalid_call = False
+            elif 2 <= prev_action['dice'] <= 6:
+              if dice == 1 and quantity >= prev_action['quantity'] / 2:
+                invalid_call = False
+              elif quantity == prev_action['quantity'] and dice >= prev_action['dice']:
+                invalid_call = False
+              elif quantity > prev_action['quantity']:
+                invalid_call = False
+            if invalid_call:
+              print('ERROR: INVALID CALL. \tGot {}. Need \'bs\' or \'exactly\', or need 2 integers separated by a space'.format(raise_call))
+            else:
+              action = {'quantity': quantity, 'dice': dice, 'bs': False, 'exactly': False}
+    return action
+
+  def calculate_cond_dist(self, num_dice_unseen):
+    c = get_conditional_distributions(self.hand, num_dice_unseen)
+    self.conditional_dist = np.array(c)
+    self.num_dice_unseen = num_dice_unseen
+    self.num_dice_in_game = num_dice_unseen + len(self.hand)
+
 
 
 def get_conditional_distributions(player_hand: List[int], num_dice_unseen: int = 15):
@@ -317,22 +379,37 @@ def runGame(verbose: int = 0):
   player_list = []
   total_dice_left = MAX_TOTAL_DICE
 
-  for i in range(NUM_PLAYERS):
-    h = np.random.randint(1, DICE_SIDES + 1, MAX_DICE_PER_PLAYER)
-    # Every player has same params
-    p = Player(hand = h, risk_thres = r, likely_thres = l, exactly_thres = e, bluff_prob = bp, bluff_thres = bt,
-                playerID= i + 1, num_dice_unseen = total_dice_left - h.size, verbose = verbose)
-    player_list.append(p)
+  player_order = ['BOT'] * NUM_BOTS + ['HUMAN'] * NUM_HUMANS
+  print(random.sample(player_order, len(player_order)))
+  for i, player_type in enumerate(random.sample(player_order, len(player_order))):
+      h = np.random.randint(1, DICE_SIDES + 1, MAX_DICE_PER_PLAYER)
+      if player_type == 'BOT':
+        # Every player has same params
+        p = Player(hand = h, risk_thres = r, likely_thres = l, exactly_thres = e, bluff_prob = bp, bluff_thres = bt,
+                    playerID= i + 1, num_dice_unseen = total_dice_left - h.size, verbose = verbose)
+
+      elif player_type == 'HUMAN':
+        p = HumanPlayer(hand = h, playerID= i + 1, num_dice_unseen = total_dice_left - h.size, verbose = verbose)
+
+      player_list.append(p)
+  print('Player order : {}'.format([(p.playerID, p.player_type) for p in player_list]))
 
   round = 0
   while(len(player_list) > 1):
     round = round + 1
-    if verbose:
-      print("---------------------------------------------------------------------------------------------------")
-      print("ROUND " + str(round))
+    print("---------------------------------------------------------------------------------------------------")
+    print("ROUND " + str(round))
+    if NUM_HUMANS == 0:
       for player in player_list:
-        print(f'Player #{player.playerID}: {player.hand}, {player.num_dice_unseen} unseen dice')
-    # simulate one round
+        if player.player_type == 'Bot':
+          print(f'Bot Player #{player.playerID}: {player.hand}, {player.num_dice_unseen} unseen dice')
+    elif NUM_HUMANS == 1:
+      for player in player_list:
+        if player.player_type == 'Bot':
+          hidden_hand = ['X'] * len(player.hand)
+          print(f'Bot Player #{player.playerID}: {hidden_hand}, {player.num_dice_unseen} unseen dice')
+        else:
+          print(f'Human Player #{player.playerID}: {player.hand}, {player.num_dice_unseen} unseen dice')
     i = 0
     prev_a = None
     end_round = False
@@ -341,18 +418,24 @@ def runGame(verbose: int = 0):
       # Use % to loop i.e.:
       # player = player_list[i % len(player_list)]
       for index, player in enumerate(player_list):
-        previous_index = (index - 1) if index > 0 else len(player_list) - 1
+        print('...')
+        time.sleep(3)
+        # Indexes and player IDs are 1 off: player_ID = index + 1
+        previous_index = index - 1 % len(player_list)
+        previous_player = player_list[previous_index]
         index_current = index
 
-        if verbose:
-          print(f'\nPlayer ID: {player.playerID}')
+        print(f'\nPlayer ID: {player.playerID}')
+        if player.player_type == 'Human':
+          print('Hand: {}'.format(player.hand))
+          a = player.action(prev_a, plot=True)
+        else:
+          a = player.action(prev_a, plot=False)
 
-        a = player.action(prev_a)
         last_play = prev_a
         prev_a = a
 
-        if verbose:
-          print('turn {}: {}'.format(i, a))
+        print('turn {}: {}'.format(i, a))
 
         i += 1
 
@@ -376,6 +459,11 @@ def runGame(verbose: int = 0):
     # figure out last hand
     # then count
 
+    if NUM_HUMANS > 0:  # Reveal everyones hands
+      print('\nREVEAL:')
+      for player in player_list:
+        print(f'{player.player_type} Player #{player.playerID}: {player.hand}')
+
     if last_play['bs']:
         count = 0
         dice_counts = Counter([number for player in player_list for number in player.hand])
@@ -384,15 +472,13 @@ def runGame(verbose: int = 0):
 
         if total_count < last_play['quantity'] and player_bullshit_called_on != None:
           player_list[previous_index].hand = player_list[previous_index].hand[1:]
-          if verbose:
-            print(f'{total_count} {last_play["dice"]}s total < Player {previous_index + 1}\'s bet of {last_play["quantity"]} {last_play["dice"]}s')
-            print("Player " + str(previous_index + 1) + " loses a die")
+          print(f'{total_count} {last_play["dice"]}s total < Player {player_list[previous_index].playerID}\'s bet of {last_play["quantity"]} {last_play["dice"]}s')
+          print(f'Player {player_list[previous_index].playerID} loses a die')
           total_dice_left = total_dice_left - 1
         elif total_count >= last_play['quantity'] and player_bullshit_called_on != None:
           player_list[index_current].hand = player_list[index_current].hand[1:]
-          if verbose:
-            print(f'{total_count} {last_play["dice"]}s total >= Player {previous_index + 1}\'s bet of {last_play["quantity"]} {last_play["dice"]}s')
-            print("Player " + str(index_current + 1) + " loses a die")
+          print(f'{total_count} {last_play["dice"]}s total >= Player {player_list[previous_index].playerID}\'s bet of {last_play["quantity"]} {last_play["dice"]}s')
+          print("Player " + str(player_list[index_current].playerID) + " loses a die")
           total_dice_left = total_dice_left - 1
     elif last_play['exactly']:
         count = 0
@@ -403,17 +489,15 @@ def runGame(verbose: int = 0):
             if len(player_list[index_current].hand) < 5:
                 player_list[index_current].hand = np.append(player_list[index_current].hand, 0)  # Add a die
                 total_dice_left = total_dice_left + 1
-                if verbose:
-                  print(f'{total_count} {last_play["dice"]}s total == Player {previous_index + 1}\'s exactly bet of {last_play["quantity"]} {last_play["dice"]}s')
-                  print("Player " + str(index_current + 1) + " wins a die")
-            elif verbose:
-                print('Player has 5 die so didn\'t gain a die')
+                print(f'{total_count} {last_play["dice"]}s total == Player {player_list[index_current].playerID}\'s exactly bet of {last_play["quantity"]} {last_play["dice"]}s')
+                print(f'Player {player_list[index_current].playerID} wins a die')
+            else:
+              print(f'Player {player_list[index_current].playerID} has 5 die so didn\'t gain a die')
         else:
             player_list[index_current].hand = player_list[index_current].hand[1:]  # Remove a die
             total_dice_left = total_dice_left - 1
-            if verbose:
-              print(f'{total_count} {last_play["dice"]}s total != Player {previous_index + 1}\'s exactly bet of {last_play["quantity"]} {last_play["dice"]}s')
-              print("Player " + str(index_current + 1) + " loses a die")
+            print(f'{total_count} {last_play["dice"]}s total != Player {player_list[index_current].playerID}\'s exactly bet of {last_play["quantity"]} {last_play["dice"]}s')
+            print(f'Player {player_list[index_current].playerID} loses a die')
 
 
     ##################################################
