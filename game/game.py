@@ -380,7 +380,6 @@ def runGame(verbose: int = 0):
   total_dice_left = MAX_TOTAL_DICE
 
   player_order = ['BOT'] * NUM_BOTS + ['HUMAN'] * NUM_HUMANS
-  print(random.sample(player_order, len(player_order)))
   for i, player_type in enumerate(random.sample(player_order, len(player_order))):
       h = np.random.randint(1, DICE_SIDES + 1, MAX_DICE_PER_PLAYER)
       if player_type == 'BOT':
@@ -392,9 +391,10 @@ def runGame(verbose: int = 0):
         p = HumanPlayer(hand = h, playerID= i + 1, num_dice_unseen = total_dice_left - h.size, verbose = verbose)
 
       player_list.append(p)
-  print('Player order : {}'.format([(p.playerID, p.player_type) for p in player_list]))
+  print('Player order: {}'.format([(p.playerID, p.player_type) for p in player_list]))
 
   round = 0
+  starting_player_index = 0  # Player 1 starts first round
   while(len(player_list) > 1):
     round = round + 1
     print("---------------------------------------------------------------------------------------------------")
@@ -413,15 +413,14 @@ def runGame(verbose: int = 0):
     i = 0
     prev_a = None
     end_round = False
-
+    rotated_player_list = player_list[starting_player_index % len(player_list):] + player_list[:starting_player_index]
     while end_round == False:
       # Use % to loop i.e.:
-      # player = player_list[i % len(player_list)]
-      for index, player in enumerate(player_list):
-        if NUM_HUMANS > 0:
+      for index, player in enumerate(rotated_player_list):
+        if NUM_HUMANS > 0:  # If a human is playing, delay the bots' plays for a better playing experience
           print('...')
           time.sleep(3)
-        # Indexes and player IDs are 1 off: player_ID = index + 1
+        # Indexes and player IDs are not the same: player_ID = index + 1
         previous_index = index - 1 % len(player_list)
         previous_player = player_list[previous_index]
         index_current = index
@@ -465,6 +464,7 @@ def runGame(verbose: int = 0):
       for player in player_list:
         print(f'{player.player_type} Player #{player.playerID}: {player.hand}')
 
+    player_starts_next_round = None
     if last_play['bs']:
         count = 0
         dice_counts = Counter([number for player in player_list for number in player.hand])
@@ -476,11 +476,13 @@ def runGame(verbose: int = 0):
           print(f'{total_count} {last_play["dice"]}s total < Player {player_list[previous_index].playerID}\'s bet of {last_play["quantity"]} {last_play["dice"]}s')
           print(f'Player {player_list[previous_index].playerID} loses a die')
           total_dice_left = total_dice_left - 1
+          starting_player_index = previous_index
         elif total_count >= last_play['quantity'] and player_bullshit_called_on != None:
           player_list[index_current].hand = player_list[index_current].hand[1:]
           print(f'{total_count} {last_play["dice"]}s total >= Player {player_list[previous_index].playerID}\'s bet of {last_play["quantity"]} {last_play["dice"]}s')
           print("Player " + str(player_list[index_current].playerID) + " loses a die")
           total_dice_left = total_dice_left - 1
+          starting_player_index = index_current
     elif last_play['exactly']:
         count = 0
         dice_counts = Counter([number for player in player_list for number in player.hand])
@@ -492,17 +494,22 @@ def runGame(verbose: int = 0):
                 total_dice_left = total_dice_left + 1
                 print(f'{total_count} {last_play["dice"]}s total == Player {player_list[index_current].playerID}\'s exactly bet of {last_play["quantity"]} {last_play["dice"]}s')
                 print(f'Player {player_list[index_current].playerID} wins a die')
+                starting_player_index = index_current
             else:
               print(f'Player {player_list[index_current].playerID} has 5 die so didn\'t gain a die')
+              starting_player_index = index_current
         else:
             player_list[index_current].hand = player_list[index_current].hand[1:]  # Remove a die
             total_dice_left = total_dice_left - 1
             print(f'{total_count} {last_play["dice"]}s total != Player {player_list[index_current].playerID}\'s exactly bet of {last_play["quantity"]} {last_play["dice"]}s')
             print(f'Player {player_list[index_current].playerID} loses a die')
-
+            starting_player_index = index_current
 
     ##################################################
     player_list = [player for player in player_list if player.hand.size > 0]
+
+    # If player who starts next round is out, the next remaining player starts
+    starting_player_index = starting_player_index % len(player_list)
 
     for player in player_list:
       player.hand = np.random.randint(1, DICE_SIDES + 1, player.hand.size)
