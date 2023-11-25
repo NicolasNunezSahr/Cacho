@@ -11,7 +11,7 @@ import sys
 import time
 
 # Set global variables
-NUM_HUMANS = 1
+NUM_HUMANS = 0
 NUM_BOTS = 3
 NUM_PLAYERS = NUM_HUMANS + NUM_BOTS
 MAX_DICE_PER_PLAYER = 5
@@ -418,8 +418,9 @@ def runGame(verbose: int = 0):
       # Use % to loop i.e.:
       # player = player_list[i % len(player_list)]
       for index, player in enumerate(player_list):
-        print('...')
-        time.sleep(3)
+        if NUM_HUMANS > 0:
+          print('...')
+          time.sleep(3)
         # Indexes and player IDs are 1 off: player_ID = index + 1
         previous_index = index - 1 % len(player_list)
         previous_player = player_list[previous_index]
