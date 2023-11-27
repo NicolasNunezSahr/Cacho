@@ -101,9 +101,11 @@ class Player:
         beta = self.num_dice_unseen * (1 -  number_prob) + (self.trustability * cumulative_calls_against)
         conditional_number_prob = alpha / (alpha + beta)
 
-        print(f'{self.playerID}: d = {number}: calls for / calls against = {cumulative_calls_for} / {cumulative_calls_against} -> prob = {conditional_number_prob}')
+        if self.verbose:
+          print(f'{self.playerID}: d = {number}: calls for / calls against = {cumulative_calls_for} / {cumulative_calls_against} -> prob = {conditional_number_prob}')
 
         # These are the unconditional probabilities of the unseen dice
+        # TODO: still need to standardize
         unconditional_probabilities = [1 - binom.cdf(n=self.num_dice_unseen, p=conditional_number_prob, k = x) + \
               binom.pmf(n=self.num_dice_unseen, p=conditional_number_prob, k = x) \
               for x in range(1, self.num_dice_unseen + 1)]
@@ -123,7 +125,7 @@ class Player:
 
         conditional_distributions_list_of_lists.append(conditional_probabilities)
 
-        print(f'cond probs: {len(conditional_probabilities)} -> {conditional_probabilities}')
+        # print(f'cond probs: {len(conditional_probabilities)} -> {conditional_probabilities}')
 
       return conditional_distributions_list_of_lists
 
