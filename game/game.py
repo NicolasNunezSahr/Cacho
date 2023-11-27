@@ -11,7 +11,7 @@ import sys
 import time
 
 # Set global variables
-NUM_HUMANS = 0
+NUM_HUMANS = 1
 NUM_BOTS = 3
 NUM_PLAYERS = NUM_HUMANS + NUM_BOTS
 MAX_DICE_PER_PLAYER = 5
@@ -187,7 +187,7 @@ class Player:
 class HumanPlayer(Player):
   def __init__(self, hand: List[int], playerID: int, num_dice_unseen: int, verbose: int = 0):
     """
-    Humans have a hand.
+    Humans can also play.
     """
     self.playerID = playerID
     self.hand = hand
@@ -205,22 +205,27 @@ class HumanPlayer(Player):
     while invalid_call:
         player_call = input('Play Format: \{quantity\} \{number\} OR \'bs\' OR \'exactly\':    ')
         if prev_action is not None:
-          if player_call == 'bs':
+          if player_call == 'bs':  # BS
             invalid_call = False
             action = prev_action.update({'bs': True})
-          elif player_call == 'exactly':
-            invalid_call = False
-            action = prev_action.update({'exactly': True})
+          elif player_call == 'exactly':  # Exactly
+            if self.num_dice_unseen + self.hand.size >= MAX_TOTAL_DICE / 2:
+                invalid_call = False
+                action = prev_action.update({'exactly': True})
+            else:
+                invalid_reason = 'Not enough dice for exactly.'
           elif len([int(i) for i in player_call.split() if i.isdigit()]) == 2:  # RAISE
             raise_call = [int(i) for i in player_call.split() if i.isdigit()]
             quantity = raise_call[0]
             dice = raise_call[1]
-            print('raise call {}'.format(raise_call))
             if prev_action['dice'] == 1:
               if dice == 1 and quantity > prev_action['quantity']:
                   invalid_call = False
               elif 2 <= dice <= 6 and quantity >= 2*prev_action['quantity'] + 1:
                   invalid_call = False
+              else:
+                invalid_reason = f'After {prev_action["quantity"]} aces, lowest call is \
+                  {prev_action["quantity"] + 1} aces or {2*prev_action["quantity"] + 1} 2s'
             elif 2 <= prev_action['dice'] <= 6:
               if dice == 1 and quantity >= prev_action['quantity'] / 2:
                 invalid_call = False
@@ -228,10 +233,32 @@ class HumanPlayer(Player):
                 invalid_call = False
               elif quantity > prev_action['quantity']:
                 invalid_call = False
-            if invalid_call:
-              print('ERROR: INVALID CALL. \tGot {}. Need \'bs\' or \'exactly\', or need 2 integers separated by a space'.format(raise_call))
+              else:
+                if prev_action['dice'] == 6:
+                  invalid_reason = f'After {prev_action["quantity"]} 6s, lowest call is \
+                    {prev_action["quantity"] + 1} 2s or {int(np.ceil(prev_action["quantity"] / 2))} 1s'
+                else:
+                  invalid_reason = f'After {prev_action["quantity"]} {prev_action["dice"]}s, lowest call is \
+                    {prev_action["quantity"]} {prev_action["dice"] + 1}s or \
+                    {int(np.ceil(prev_action["quantity"] / 2))} 1s'
+          else:
+            invalid_reason = f'What is that? Try again.'
+          if invalid_call:
+            print('ERROR: INVALID CALL. {}. Got: {}'.format(invalid_reason, raise_call))
+          else:
+            action = {'quantity': quantity, 'dice': dice, 'bs': False, 'exactly': False}
+        else:
+          if len([int(i) for i in player_call.split() if i.isdigit()]) == 2:  # RAISE
+            raise_call = [int(i) for i in player_call.split() if i.isdigit()]
+            quantity = raise_call[0]
+            dice = raise_call[1]
+            if 1 <= dice <= 6:
+              invalid_call = False
             else:
-              action = {'quantity': quantity, 'dice': dice, 'bs': False, 'exactly': False}
+              invalid_reason = 'Dice must be within 1 and 6.'
+          else:
+            invalid_reason = 'Must start with 2 integers.'
+
     return action
 
   def calculate_cond_dist(self, num_dice_unseen):
