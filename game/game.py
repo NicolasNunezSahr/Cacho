@@ -11,7 +11,7 @@ import sys
 import time
 
 # Set global variables
-NUM_HUMANS = 1
+NUM_HUMANS = 0
 NUM_BOTS = 3
 NUM_PLAYERS = NUM_HUMANS + NUM_BOTS
 MAX_DICE_PER_PLAYER = 5
