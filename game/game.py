@@ -11,7 +11,7 @@ import sys
 import time
 
 # Set global variables
-NUM_HUMANS = 0
+NUM_HUMANS = 1
 NUM_BOTS = 3
 NUM_PLAYERS = NUM_HUMANS + NUM_BOTS
 MAX_DICE_PER_PLAYER = 5
@@ -261,13 +261,15 @@ class Player:
     return best_action
 
 class HumanPlayer(Player):
-  def __init__(self, hand: List[int], playerID: int, num_dice_unseen: int, verbose: int = 0):
+  def __init__(self, hand: List[int], playerID: int, num_dice_unseen: int, trustability: float, verbose: int = 0):
     """
     Humans can also play.
     """
     self.playerID = playerID
     self.hand = hand
+    self.verbose = verbose
     self.num_dice_unseen = num_dice_unseen
+    self.trustability = trustability
     self.player_type = 'Human'
 
     self.calculate_cond_dist(num_dice_unseen)
@@ -493,7 +495,7 @@ def runGame(verbose: int = 0):
                     verbose = verbose)
 
       elif player_type == 'HUMAN':
-        p = HumanPlayer(hand = h, playerID= i + 1, num_dice_unseen = total_dice_left - h.size, verbose = verbose)
+        p = HumanPlayer(hand = h, playerID = i + 1, trustability = trust, num_dice_unseen = total_dice_left - h.size)
 
       player_list.append(p)
   print('Player order: {}'.format([(p.playerID, p.player_type) for p in player_list]))
