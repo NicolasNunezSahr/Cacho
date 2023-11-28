@@ -105,11 +105,10 @@ class Player:
         conditional_number_probs.append(conditional_number_prob)
 
       # Standardize number probs so sum equals 1.85 = 1/6 + 5 * (1/3)
-      sum_to_one = np.sum([prob for prob in conditional_number_probs])
-      conditional_number_probs_st = np.divide(conditional_number_probs,
-                                              np.sum(conditional_number_probs) / ((1/6) + (5 * (1/3))))
-      print(f'{conditional_number_probs} -> {conditional_number_probs_st}')
-
+      # sum_to_one = np.sum([prob for prob in conditional_number_probs])
+      # conditional_number_probs_st = np.divide(conditional_number_probs,
+      #                                         np.sum(conditional_number_probs) / ((1/6) + (5 * (1/3))))
+      conditional_number_probs_st = conditional_number_probs
       conditional_distributions_list_of_lists = []
       for number in range(1, DICE_SIDES + 1):
         if self.verbose:
@@ -659,7 +658,7 @@ def runGame(verbose: int = 0):
 
 if __name__ == '__main__':
     winners = []
-    max_games = 1
+    max_games = 5000
     with open('simulation_results/risk_prob_{}.csv'.format(datetime.now().strftime("%d%m%Y%H%M%S")), 'w', newline='') as csvfile:
         csvwriter = csv.writer(csvfile, delimiter=',')
         csvwriter.writerow(['call_bullshit_threshold', 'win_bool'])
