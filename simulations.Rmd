@@ -1,0 +1,44 @@
+---
+title: 'Cacho: Simulation Results'
+author: "Nicolas Nunez-Sahr"
+date: "2023-11-28"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(dplyr)
+library(ggplot2)
+
+simulation_data = read.csv(file = paste0(getwd(), '/game/simulation_results/risk_prob.csv'))
+sim_data2 = read.csv(file = paste0(getwd(), '/game/simulation_results/risk_prob_27112023220413.csv'))
+```
+
+```{r winning_probs}
+simulation_results = simulation_data %>%
+  mutate(rounded_bs_threshold = round(call_bullshit_threshold, 1)) %>% 
+  group_by(rounded_bs_threshold) %>%
+  summarise(win_probability = mean(win_bool), n = n())
+
+
+ggplot(simulation_results, aes(x=rounded_bs_threshold, y=win_probability)) +
+  geom_point(aes(size=n)) +
+  geom_line() +
+  geom_hline(yintercept = 1/3, color = 'grey')
+
+
+simulation_results2 = sim_data2 %>%
+  mutate(rounded_bs_threshold = round(call_bullshit_threshold, 1)) %>% 
+  group_by(rounded_bs_threshold) %>%
+  summarise(win_probability = mean(win_bool), n = n())
+
+
+ggplot(simulation_results2, aes(x=rounded_bs_threshold, y=win_probability)) +
+  geom_point(aes(size=n)) +
+  geom_line() +
+  geom_hline(yintercept = 1/3, color = 'grey')
+
+```
+
+
+
