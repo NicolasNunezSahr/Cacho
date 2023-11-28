@@ -9,6 +9,7 @@ from scipy.stats import binom
 import matplotlib.pyplot as plt
 import sys
 import time
+import csv
 
 # Set global variables
 NUM_HUMANS = 0
@@ -486,7 +487,9 @@ def runGame(verbose: int = 0):
   total_dice_left = MAX_TOTAL_DICE
 
   player_order = ['BOT'] * NUM_BOTS + ['HUMAN'] * NUM_HUMANS
+  parameters_of_interest = []
   for i, player_type in enumerate(random.sample(player_order, len(player_order))):
+      r = np.random.uniform(0, 1, 1)[0]  # PARAMETER OF INTEREST: Override risk / bullshit threshold
       h = np.random.randint(1, DICE_SIDES + 1, MAX_DICE_PER_PLAYER)
       if player_type == 'BOT':
         # Every player has same params
@@ -496,6 +499,8 @@ def runGame(verbose: int = 0):
 
       elif player_type == 'HUMAN':
         p = HumanPlayer(hand = h, playerID = i + 1, trustability = trust, num_dice_unseen = total_dice_left - h.size)
+
+      parameters_of_interest.append(r)
 
       player_list.append(p)
   print('Player order: {}'.format([(p.playerID, p.player_type) for p in player_list]))
@@ -628,24 +633,28 @@ def runGame(verbose: int = 0):
       player.hand = np.random.randint(1, DICE_SIDES + 1, player.hand.size)
       player.calculate_cond_dist(num_dice_unseen = total_dice_left - player.hand.size)
 
-
-  return player_list[0].playerID
+  return player_list[0].playerID, parameters_of_interest
 
 
 
 if __name__ == '__main__':
     winners = []
-    max_games = 1
-    for i, games in enumerate(range(max_games)):
-      gameWin = runGame(verbose=1)
-      print(f'({i + 1}/{max_games}) PLAYER {gameWin} WINS')
-
-      winners.append(gameWin)
+    max_games = 100
+    with open('risk_prob.csv', 'w', newline='') as csvfile:
+        csvwriter = csv.writer(csvfile, delimiter=',')
+        csvwriter.writerow(['call_bullshit_threshold', 'win_bool'])
+        for i, games in enumerate(range(max_games)):
+          gameWin, params = runGame(verbose=0)
+          print(f'({i + 1}/{max_games}) PLAYER {gameWin} WINS')
+          for i, param in enumerate(params):
+            player_id = i + 1
+            if player_id == gameWin:
+              csvwriter.writerow([round(param, 3), 1])
+            else:
+              csvwriter.writerow([round(param, 3), 0])
+        winners.append(gameWin)
 
     Counter(winners)
-
-
-
 
 
 
