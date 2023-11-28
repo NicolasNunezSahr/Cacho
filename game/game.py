@@ -75,7 +75,7 @@ class Player:
       """
 
       counts_of_numbers = Counter(self.hand)
-      conditional_distributions_list_of_lists = []
+      conditional_number_probs = []
       for number in range(1, DICE_SIDES + 1):
         # count quantity of dice in hand
         if number in list(counts_of_numbers.keys()):
@@ -102,14 +102,21 @@ class Player:
         alpha = (self.num_dice_unseen * number_prob) + (self.trustability * cumulative_calls_for)
         beta = self.num_dice_unseen * (1 -  number_prob) + (self.trustability * cumulative_calls_against)
         conditional_number_prob = alpha / (alpha + beta)
+        conditional_number_probs.append(conditional_number_prob)
+      # Standardize number probs to equal 1
+      sum_to_one = np.sum([prob for prob in conditional_number_probs])
+      conditional_number_probs_st = np.divide(conditional_number_probs, np.sum(conditional_number_probs) / ((1/6) + (5 * (1/3))))
+      print(f'{conditional_number_probs} -> {conditional_number_probs_st}')
 
+      conditional_distributions_list_of_lists = []
+      for number in range(1, DICE_SIDES + 1):
         if self.verbose:
           print(f'{self.playerID}: d = {number}: calls for / calls against = {cumulative_calls_for} / {cumulative_calls_against} -> prob = {conditional_number_prob}')
 
         # These are the unconditional probabilities of the unseen dice
         # TODO: still need to standardize
-        unconditional_probabilities = [1 - binom.cdf(n=self.num_dice_unseen, p=conditional_number_prob, k = x) + \
-              binom.pmf(n=self.num_dice_unseen, p=conditional_number_prob, k = x) \
+        unconditional_probabilities = [1 - binom.cdf(n=self.num_dice_unseen, p=conditional_number_probs_st[number - 1], k = x) + \
+              binom.pmf(n=self.num_dice_unseen, p=conditional_number_probs_st[number - 1], k = x) \
               for x in range(1, self.num_dice_unseen + 1)]
 
         # print(f'unseen probs: {len(unconditional_probabilities)} -> {unconditional_probabilities}')
@@ -650,7 +657,7 @@ def runGame(verbose: int = 0):
 
 if __name__ == '__main__':
     winners = []
-    max_games = 5000
+    max_games = 1
     with open('simulation_results/risk_prob_{}.csv'.format(datetime.now().strftime("%d%m%Y%H%M%S")), 'w', newline='') as csvfile:
         csvwriter = csv.writer(csvfile, delimiter=',')
         csvwriter.writerow(['call_bullshit_threshold', 'win_bool'])
