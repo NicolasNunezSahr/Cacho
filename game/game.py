@@ -103,9 +103,11 @@ class Player:
         beta = self.num_dice_unseen * (1 -  number_prob) + (self.trustability * cumulative_calls_against)
         conditional_number_prob = alpha / (alpha + beta)
         conditional_number_probs.append(conditional_number_prob)
-      # Standardize number probs to equal 1
+
+      # Standardize number probs so sum equals 1.85 = 1/6 + 5 * (1/3)
       sum_to_one = np.sum([prob for prob in conditional_number_probs])
-      conditional_number_probs_st = np.divide(conditional_number_probs, np.sum(conditional_number_probs) / ((1/6) + (5 * (1/3))))
+      conditional_number_probs_st = np.divide(conditional_number_probs,
+                                              np.sum(conditional_number_probs) / ((1/6) + (5 * (1/3))))
       print(f'{conditional_number_probs} -> {conditional_number_probs_st}')
 
       conditional_distributions_list_of_lists = []
