@@ -639,8 +639,8 @@ def runGame(verbose: int = 0):
 
 if __name__ == '__main__':
     winners = []
-    max_games = 100
-    with open('risk_prob.csv', 'w', newline='') as csvfile:
+    max_games = 10
+    with open('simulation_results/risk_prob.csv', 'w', newline='') as csvfile:
         csvwriter = csv.writer(csvfile, delimiter=',')
         csvwriter.writerow(['call_bullshit_threshold', 'win_bool'])
         for i, games in enumerate(range(max_games)):
