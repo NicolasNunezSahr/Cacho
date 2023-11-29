@@ -542,21 +542,17 @@ def runGame(verbose: int = 0):
   game_metadata = []
 
   player_types = ['BOT'] * NUM_BOTS + ['HUMAN'] * NUM_HUMANS
-  # To change parameter of interest change rows: 549 - 553 and 716
-  parameters_of_interest = []
-  player_output_list = []
+  player_metadata = []
   shuffled_player_types = random.sample(player_types, len(player_types))  # Shuffle player types
   for i, player_type in enumerate(shuffled_player_types):
       if i == 1:
-        r = 0  # PARAMETER OF INTEREST: bullshit probability
-        param = r
+        trust = 0  # PARAMETER OF INTEREST: trustability
       else:
-        r = 0.37
-        param = r
+        trust = 0
 
       h = np.random.randint(1, DICE_SIDES + 1, MAX_DICE_PER_PLAYER)
       if player_type == 'BOT':
-        # Every player has same params
+        # All players have almost the same params
         p = Player(hand = h, risk_thres = r, likely_thres = l, exactly_thres = e, bluff_prob = bp, bluff_thres = bt,
                     trustability = trust, playerID= i + 1, num_dice_unseen = total_dice_left - h.size,
                     verbose = verbose)
@@ -564,8 +560,7 @@ def runGame(verbose: int = 0):
       elif player_type == 'HUMAN':
         p = HumanPlayer(hand = h, playerID = i + 1, trustability = trust, num_dice_unseen = total_dice_left - h.size)
 
-      parameters_of_interest.append(param)
-      player_output_list.append(p.playerID)  # Static; doesn't change throughout the game
+      player_metadata.append([p.playerID, p.risk_thres, p.likely_thres, p.exactly_thres, p.bluff_prob, p.bluff_thres, p.trustability])
       player_list.append(p)  # Keeps track of players left in game
 
   if verbose:
@@ -709,10 +704,7 @@ def runGame(verbose: int = 0):
       player.calculate_cond_dist(num_dice_unseen = total_dice_left - player.hand.size)
 
   game_metadata = {'game_playerid_winner': player_list[0].playerID,
-                   'player_output_list': player_output_list,
-                   'parameter_of_interest_name': parameter_of_interest_name,
-                   'parameter_of_interest_values': parameters_of_interest
-                    }
+                   'player_metadata': player_metadata}
   return game_metadata
 
 
@@ -720,21 +712,26 @@ def runGame(verbose: int = 0):
 if __name__ == '__main__':
     winners = []
     max_games = 5000
-    parameter_of_interest_name = 'bs_prob'
-    with open('simulation_results/{}_{}.csv'.format(parameter_of_interest_name, datetime.now().strftime("%d%m%Y%H%M%S")), 'w', newline='') as csvfile:
+    file_name = 'simulation_results/cacho_{}.csv'.format(datetime.now().strftime("%d%m%Y%H%M%S"))
+    with open(file_name, 'w', newline='') as csvfile:
+        print('Saving results to: {}'.format(file_name))
         csvwriter = csv.writer(csvfile, delimiter=',')
-        csvwriter.writerow(['player_id', '{}_threshold'.format(parameter_of_interest_name), 'win_bool'])
+        csvwriter.writerow(['player_id', 'risk_thres', 'likely_thres', 'exactly_thres', 'bluff_prob', 'bluff_thres', 'trustability', 'win_bool'])
         for i, games in enumerate(range(max_games)):
           game_metadata = runGame(verbose=0)
           gameWin = game_metadata["game_playerid_winner"]
-          params = game_metadata["parameter_of_interest_values"]
-          player_order = game_metadata["player_output_list"]
-          print(f'({i + 1}/{max_games}) PLAYER {gameWin} WINS')
-          for i, param in enumerate(params):
-            if player_order[i] == game_metadata["game_playerid_winner"]:
-              csvwriter.writerow([player_order[i], round(param, 3), 1])
+          player_metadata = game_metadata["player_metadata"]
+          if i % 10 == 0:
+            print(f'({i + 1}/{max_games}) PLAYER {gameWin} WINS')
+          for i, specific_player_metadata in enumerate(player_metadata):
+            if specific_player_metadata[0] == game_metadata["game_playerid_winner"]:
+              player_row = specific_player_metadata
+              player_row.extend([1])  # Add win
+              csvwriter.writerow(player_row)
             else:
-              csvwriter.writerow([player_order[i], round(param, 3), 0])
+              player_row = specific_player_metadata
+              player_row.extend([0])  # Add lose
+              csvwriter.writerow(player_row)
         winners.append(gameWin)
         Counter(winners)
 
