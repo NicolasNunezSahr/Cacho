@@ -131,11 +131,16 @@ binomials_df_g = binomials_df %>%
 
 # trustability
 ```{r trust}
-trust_data = read.csv(file = paste0(getwd(), '/game/simulation_results/trust_29112023004446.csv'))
+trust_data1 = read.csv(file = paste0(getwd(), '/game/simulation_results/trust_29112023101902.csv'))
+trust_data1$experiment = 0
+trust_data2 = read.csv(file = paste0(getwd(), '/game/simulation_results/trust_29112023111527.csv'))
+trust_data2$experiment = 1
+trust_data3 = read.csv(file = paste0(getwd(), '/game/simulation_results/trust_29112023114521.csv'))
+trust_data3$experiment = 2
+trust_data = rbind(trust_data1, trust_data2, trust_data3)
 
 trust_results = trust_data %>%
-  mutate(rounded_trust = round(trustability, 1)) %>% 
-  group_by(rounded_trust) %>%
+  group_by(player_id, experiment) %>%
   summarise(win_probability = mean(win_bool), n = n())
 
 
