@@ -534,17 +534,18 @@ def runGame(verbose: int = 0):
   r = 0.37  # risk / bullshit threshold
   l = 0.8  # likely threshold
   e = 0.4  # exactly threshold
-  bt = 0.25 # bluff threshold
-  bp = 0.6 # bluff probability
+  bt = 0.37 # bluff threshold
+  bp = 0.2 # bluff probability
   trust = 1.0  # trustability
   player_list = []
   total_dice_left = MAX_TOTAL_DICE
 
-  player_order = ['BOT'] * NUM_BOTS + ['HUMAN'] * NUM_HUMANS
+  player_types = ['BOT'] * NUM_BOTS + ['HUMAN'] * NUM_HUMANS
   # To change parameter of interest change rows: 549 - 553 and 716
   parameters_of_interest = []
   player_output_list = []
-  for i, player_type in enumerate(random.sample(player_order, len(player_order))):  # Shuffle player order
+  shuffled_player_types = random.sample(player_types, len(player_types))  # Shuffle player types
+  for i, player_type in enumerate(shuffled_player_types):
       if i == 1:
         r = 0  # PARAMETER OF INTEREST: bullshit probability
         param = r
