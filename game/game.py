@@ -5,7 +5,7 @@ from math import ceil
 
 from collections import Counter
 from typing import List
-from scipy.stats import binom
+from scipy.stats import binom, beta
 import matplotlib.pyplot as plt
 import sys
 import time
@@ -460,6 +460,51 @@ def get_exactly_distributions(player_hand: List[int], num_dice_unseen: int = 15)
 
   return conditional_exactly_distributions_list_of_lists
 
+def get_conditional_distribution_for_number(player_hand: List[int], number: int, num_dice_unseen: int = 10, wild_prob: float = 1/6, other_prob: float = 1/3):
+    """
+    Usage:
+    hand = [4, 3, 1, 2, 1]
+    number_to_plot = 3
+    cond_distribution_3s = get_conditional_distribution_for_number(player_hand=hand, number=number_to_plot, num_dice_unseen=10)
+    """
+    count_in_hand = Counter(player_hand).get(number, 0)
+    number_prob = wild_prob if number == 1 else other_prob
+
+    unconditional_probabilities = [
+        1 - binom.cdf(n=num_dice_unseen, p=number_prob, k=x) +
+        binom.pmf(n=num_dice_unseen, p=number_prob, k=x)
+        for x in range(1, num_dice_unseen + 1)
+    ]
+
+    conditional_probabilities = [
+        1.0] * (count_in_hand + 1) + [-1.0] * len(unconditional_probabilities) + [0.0] * (len(player_hand) - count_in_hand)
+
+    for i, prob in enumerate(unconditional_probabilities):
+        if i > num_dice_unseen + len(player_hand):
+            break
+        conditional_probabilities[i + count_in_hand + 1] = prob
+
+    # Plotting as a red bar graph
+    plt.bar(range(1, len(conditional_probabilities) + 1), conditional_probabilities, label=f'Number {number}', color='red')
+
+    plt.xlabel('Count of Dice')
+    plt.ylabel('Probability')
+    plt.title(f'Conditional Distribution for Number {number} in Player Hand')
+    plt.legend()
+    plt.show()
+
+    return conditional_probabilities
+
+def plot_beta_distribution(a: float, b: float):
+    fig, ax = plt.subplots(1, 1)
+    x = np.linspace(beta.ppf(0.01, a, b),
+                beta.ppf(0.99, a, b), 100)
+    ax.plot(x, beta.pdf(x, a, b), 'black', lw=2, alpha=0.6, label='beta(alpha = {}, beta = {}) PDF'.format(a, b))
+    plt.axvline(x = a / (a + b), color = 'grey', label = 'E(p)')
+    ax.set_xlabel(f'Probability of a 3')
+    ax.set_ylabel(f'Density')
+    plt.text(0.35, 2.6, f'Expected Value = {round(a / (a + b), 2)}', fontsize=12)
+    plt.show()
 
 def plot_distributions(cond_distributions: List[List[float]], player_id: int = 0):
   """
@@ -657,23 +702,24 @@ def runGame(verbose: int = 0):
 
 
 if __name__ == '__main__':
-    winners = []
-    max_games = 5000
-    with open('simulation_results/risk_prob_{}.csv'.format(datetime.now().strftime("%d%m%Y%H%M%S")), 'w', newline='') as csvfile:
-        csvwriter = csv.writer(csvfile, delimiter=',')
-        csvwriter.writerow(['call_bullshit_threshold', 'win_bool'])
-        for i, games in enumerate(range(max_games)):
-          gameWin, params = runGame(verbose=0)
-          print(f'({i + 1}/{max_games}) PLAYER {gameWin} WINS')
-          for i, param in enumerate(params):
-            player_id = i + 1
-            if player_id == gameWin:
-              csvwriter.writerow([round(param, 3), 1])
-            else:
-              csvwriter.writerow([round(param, 3), 0])
-        winners.append(gameWin)
-
-    Counter(winners)
+    #     winners = []
+    #     max_games = 5000
+    #     with open('simulation_results/risk_prob_{}.csv'.format(datetime.now().strftime("%d%m%Y%H%M%S")), 'w', newline='') as csvfile:
+    #         csvwriter = csv.writer(csvfile, delimiter=',')
+    #         csvwriter.writerow(['call_bullshit_threshold', 'win_bool'])
+    #         for i, games in enumerate(range(max_games)):
+    #           gameWin, params = runGame(verbose=0)
+    #           print(f'({i + 1}/{max_games}) PLAYER {gameWin} WINS')
+    #           for i, param in enumerate(params):
+    #             player_id = i + 1
+    #             if player_id == gameWin:
+    #               csvwriter.writerow([round(param, 3), 1])
+    #             else:
+    #               csvwriter.writerow([round(param, 3), 0])
+    #         winners.append(gameWin)
+    #
+    #     Counter(winners)
+    plot_beta_distribution(a=10 * (1/3), b=10 * (2/3))
 
 
 

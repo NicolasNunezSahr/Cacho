@@ -11,7 +11,7 @@ library(dplyr)
 library(ggplot2)
 
 simulation_data = read.csv(file = paste0(getwd(), '/game/simulation_results/risk_prob.csv'))
-sim_data2 = read.csv(file = paste0(getwd(), '/game/simulation_results/risk_prob_27112023220413.csv'))
+sim_data2 = read.csv(file = paste0(getwd(), '/game/simulation_results/risk_prob_28112023152951.csv'))
 ```
 
 ```{r winning_probs}
