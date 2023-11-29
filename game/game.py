@@ -541,9 +541,17 @@ def runGame(verbose: int = 0):
   total_dice_left = MAX_TOTAL_DICE
 
   player_order = ['BOT'] * NUM_BOTS + ['HUMAN'] * NUM_HUMANS
+  # To change parameter of interest change rows: 549 - 553 and 716
   parameters_of_interest = []
-  for i, player_type in enumerate(random.sample(player_order, len(player_order))):
-      r = np.random.uniform(0, 1, 1)[0]  # PARAMETER OF INTEREST: Override risk / bullshit threshold
+  player_output_list = []
+  for i, player_type in enumerate(random.sample(player_order, len(player_order))):  # Shuffle player order
+      if i == 1:
+        r = 0  # PARAMETER OF INTEREST: bullshit probability
+        param = r
+      else:
+        r = 0.37
+        param = r
+
       h = np.random.randint(1, DICE_SIDES + 1, MAX_DICE_PER_PLAYER)
       if player_type == 'BOT':
         # Every player has same params
@@ -554,9 +562,10 @@ def runGame(verbose: int = 0):
       elif player_type == 'HUMAN':
         p = HumanPlayer(hand = h, playerID = i + 1, trustability = trust, num_dice_unseen = total_dice_left - h.size)
 
-      parameters_of_interest.append(r)
+      parameters_of_interest.append(param)
+      player_output_list.append(p.playerID)  # Static; doesn't change throughout the game
+      player_list.append(p)  # Keeps track of players left in game
 
-      player_list.append(p)
   if verbose:
     print('Player order: {}'.format([(p.playerID, p.player_type) for p in player_list]))
 
@@ -697,29 +706,28 @@ def runGame(verbose: int = 0):
       player.hand = np.random.randint(1, DICE_SIDES + 1, player.hand.size)
       player.calculate_cond_dist(num_dice_unseen = total_dice_left - player.hand.size)
 
-  return player_list[0].playerID, parameters_of_interest
+  return player_list[0].playerID, parameters_of_interest, player_output_list
 
 
 
 if __name__ == '__main__':
-    #     winners = []
-    #     max_games = 5000
-    #     with open('simulation_results/risk_prob_{}.csv'.format(datetime.now().strftime("%d%m%Y%H%M%S")), 'w', newline='') as csvfile:
-    #         csvwriter = csv.writer(csvfile, delimiter=',')
-    #         csvwriter.writerow(['call_bullshit_threshold', 'win_bool'])
-    #         for i, games in enumerate(range(max_games)):
-    #           gameWin, params = runGame(verbose=0)
-    #           print(f'({i + 1}/{max_games}) PLAYER {gameWin} WINS')
-    #           for i, param in enumerate(params):
-    #             player_id = i + 1
-    #             if player_id == gameWin:
-    #               csvwriter.writerow([round(param, 3), 1])
-    #             else:
-    #               csvwriter.writerow([round(param, 3), 0])
-    #         winners.append(gameWin)
-    #
-    #     Counter(winners)
-    plot_beta_distribution(a=10 * (1/3), b=10 * (2/3))
+    winners = []
+    max_games = 5000
+    parameter_of_interest_name = 'bs_prob'
+    with open('simulation_results/{}_{}.csv'.format(parameter_of_interest_name, datetime.now().strftime("%d%m%Y%H%M%S")), 'w', newline='') as csvfile:
+        csvwriter = csv.writer(csvfile, delimiter=',')
+        csvwriter.writerow(['player_id', '{}_threshold'.format(parameter_of_interest_name), 'win_bool'])
+        for i, games in enumerate(range(max_games)):
+          gameWin, params, player_order = runGame(verbose=0)
+          print(f'({i + 1}/{max_games}) PLAYER {gameWin} WINS')
+          for i, param in enumerate(params):
+            if player_order[i] == gameWin:
+              csvwriter.writerow([player_order[i], round(param, 3), 1])
+            else:
+              csvwriter.writerow([player_order[i], round(param, 3), 0])
+        winners.append(gameWin)
+
+        Counter(winners)
 
 
 
