@@ -539,6 +539,7 @@ def runGame(verbose: int = 0):
   trust = 1.0  # trustability
   player_list = []
   total_dice_left = MAX_TOTAL_DICE
+  game_metadata = []
 
   player_types = ['BOT'] * NUM_BOTS + ['HUMAN'] * NUM_HUMANS
   # To change parameter of interest change rows: 549 - 553 and 716
@@ -707,7 +708,12 @@ def runGame(verbose: int = 0):
       player.hand = np.random.randint(1, DICE_SIDES + 1, player.hand.size)
       player.calculate_cond_dist(num_dice_unseen = total_dice_left - player.hand.size)
 
-  return player_list[0].playerID, parameters_of_interest, player_output_list
+  game_metadata = {'game_playerid_winner': player_list[0].playerID,
+                   'player_output_list': player_output_list,
+                   'parameter_of_interest_name': parameter_of_interest_name,
+                   'parameter_of_interest_values': parameters_of_interest
+                    }
+  return game_metadata
 
 
 
@@ -719,15 +725,17 @@ if __name__ == '__main__':
         csvwriter = csv.writer(csvfile, delimiter=',')
         csvwriter.writerow(['player_id', '{}_threshold'.format(parameter_of_interest_name), 'win_bool'])
         for i, games in enumerate(range(max_games)):
-          gameWin, params, player_order = runGame(verbose=0)
+          game_metadata = runGame(verbose=0)
+          gameWin = game_metadata["game_playerid_winner"]
+          params = game_metadata["parameter_of_interest_values"]
+          player_order = game_metadata["player_output_list"]
           print(f'({i + 1}/{max_games}) PLAYER {gameWin} WINS')
           for i, param in enumerate(params):
-            if player_order[i] == gameWin:
+            if player_order[i] == game_metadata["game_playerid_winner"]:
               csvwriter.writerow([player_order[i], round(param, 3), 1])
             else:
               csvwriter.writerow([player_order[i], round(param, 3), 0])
         winners.append(gameWin)
-
         Counter(winners)
 
 
