@@ -5,10 +5,11 @@ from math import ceil
 
 from collections import Counter
 from typing import List
-from scipy.stats import binom
+from scipy.stats import binom, beta
 import matplotlib.pyplot as plt
 import sys
 import time
+from datetime import datetime
 import csv
 
 # Set global variables
@@ -74,7 +75,7 @@ class Player:
       """
 
       counts_of_numbers = Counter(self.hand)
-      conditional_distributions_list_of_lists = []
+      conditional_number_probs = []
       for number in range(1, DICE_SIDES + 1):
         # count quantity of dice in hand
         if number in list(counts_of_numbers.keys()):
@@ -101,14 +102,22 @@ class Player:
         alpha = (self.num_dice_unseen * number_prob) + (self.trustability * cumulative_calls_for)
         beta = self.num_dice_unseen * (1 -  number_prob) + (self.trustability * cumulative_calls_against)
         conditional_number_prob = alpha / (alpha + beta)
+        conditional_number_probs.append(conditional_number_prob)
 
+      # Standardize number probs so sum equals 1.85 = 1/6 + 5 * (1/3)
+      # sum_to_one = np.sum([prob for prob in conditional_number_probs])
+      # conditional_number_probs_st = np.divide(conditional_number_probs,
+      #                                         np.sum(conditional_number_probs) / ((1/6) + (5 * (1/3))))
+      conditional_number_probs_st = conditional_number_probs
+      conditional_distributions_list_of_lists = []
+      for number in range(1, DICE_SIDES + 1):
         if self.verbose:
           print(f'{self.playerID}: d = {number}: calls for / calls against = {cumulative_calls_for} / {cumulative_calls_against} -> prob = {conditional_number_prob}')
 
         # These are the unconditional probabilities of the unseen dice
         # TODO: still need to standardize
-        unconditional_probabilities = [1 - binom.cdf(n=self.num_dice_unseen, p=conditional_number_prob, k = x) + \
-              binom.pmf(n=self.num_dice_unseen, p=conditional_number_prob, k = x) \
+        unconditional_probabilities = [1 - binom.cdf(n=self.num_dice_unseen, p=conditional_number_probs_st[number - 1], k = x) + \
+              binom.pmf(n=self.num_dice_unseen, p=conditional_number_probs_st[number - 1], k = x) \
               for x in range(1, self.num_dice_unseen + 1)]
 
         # print(f'unseen probs: {len(unconditional_probabilities)} -> {unconditional_probabilities}')
@@ -451,6 +460,51 @@ def get_exactly_distributions(player_hand: List[int], num_dice_unseen: int = 15)
 
   return conditional_exactly_distributions_list_of_lists
 
+def get_conditional_distribution_for_number(player_hand: List[int], number: int, num_dice_unseen: int = 10, wild_prob: float = 1/6, other_prob: float = 1/3):
+    """
+    Usage:
+    hand = [4, 3, 1, 2, 1]
+    number_to_plot = 3
+    cond_distribution_3s = get_conditional_distribution_for_number(player_hand=hand, number=number_to_plot, num_dice_unseen=10)
+    """
+    count_in_hand = Counter(player_hand).get(number, 0)
+    number_prob = wild_prob if number == 1 else other_prob
+
+    unconditional_probabilities = [
+        1 - binom.cdf(n=num_dice_unseen, p=number_prob, k=x) +
+        binom.pmf(n=num_dice_unseen, p=number_prob, k=x)
+        for x in range(1, num_dice_unseen + 1)
+    ]
+
+    conditional_probabilities = [
+        1.0] * (count_in_hand + 1) + [-1.0] * len(unconditional_probabilities) + [0.0] * (len(player_hand) - count_in_hand)
+
+    for i, prob in enumerate(unconditional_probabilities):
+        if i > num_dice_unseen + len(player_hand):
+            break
+        conditional_probabilities[i + count_in_hand + 1] = prob
+
+    # Plotting as a red bar graph
+    plt.bar(range(1, len(conditional_probabilities) + 1), conditional_probabilities, label=f'Number {number}', color='red')
+
+    plt.xlabel('Count of Dice')
+    plt.ylabel('Probability')
+    plt.title(f'Conditional Distribution for Number {number} in Player Hand')
+    plt.legend()
+    plt.show()
+
+    return conditional_probabilities
+
+def plot_beta_distribution(a: float, b: float):
+    fig, ax = plt.subplots(1, 1)
+    x = np.linspace(beta.ppf(0.01, a, b),
+                beta.ppf(0.99, a, b), 100)
+    ax.plot(x, beta.pdf(x, a, b), 'black', lw=2, alpha=0.6, label='beta(alpha = {}, beta = {}) PDF'.format(a, b))
+    plt.axvline(x = a / (a + b), color = 'grey', label = 'E(p)')
+    ax.set_xlabel(f'Probability of a 3')
+    ax.set_ylabel(f'Density')
+    plt.text(0.35, 2.6, f'Expected Value = {round(a / (a + b), 2)}', fontsize=12)
+    plt.show()
 
 def plot_distributions(cond_distributions: List[List[float]], player_id: int = 0):
   """
@@ -486,10 +540,19 @@ def runGame(verbose: int = 0):
   player_list = []
   total_dice_left = MAX_TOTAL_DICE
 
-  player_order = ['BOT'] * NUM_BOTS + ['HUMAN'] * NUM_HUMANS
+  player_types = ['BOT'] * NUM_BOTS + ['HUMAN'] * NUM_HUMANS
+  # To change parameter of interest change rows: 549 - 553 and 716
   parameters_of_interest = []
-  for i, player_type in enumerate(random.sample(player_order, len(player_order))):
-      r = np.random.uniform(0, 1, 1)[0]  # PARAMETER OF INTEREST: Override risk / bullshit threshold
+  player_output_list = []
+  shuffled_player_types = random.sample(player_types, len(player_types))  # Shuffle player types
+  for i, player_type in enumerate(shuffled_player_types):
+      if i == 1:
+        r = 0  # PARAMETER OF INTEREST: bullshit probability
+        param = r
+      else:
+        r = 0.37
+        param = r
+
       h = np.random.randint(1, DICE_SIDES + 1, MAX_DICE_PER_PLAYER)
       if player_type == 'BOT':
         # Every player has same params
@@ -500,28 +563,32 @@ def runGame(verbose: int = 0):
       elif player_type == 'HUMAN':
         p = HumanPlayer(hand = h, playerID = i + 1, trustability = trust, num_dice_unseen = total_dice_left - h.size)
 
-      parameters_of_interest.append(r)
+      parameters_of_interest.append(param)
+      player_output_list.append(p.playerID)  # Static; doesn't change throughout the game
+      player_list.append(p)  # Keeps track of players left in game
 
-      player_list.append(p)
-  print('Player order: {}'.format([(p.playerID, p.player_type) for p in player_list]))
+  if verbose:
+    print('Player order: {}'.format([(p.playerID, p.player_type) for p in player_list]))
 
   round = 0
   starting_player_index = 0  # Player 1 starts first round
   while(len(player_list) > 1):
     round = round + 1
-    print("---------------------------------------------------------------------------------------------------")
-    print("ROUND " + str(round))
-    if NUM_HUMANS == 0:
-      for player in player_list:
-        if player.player_type == 'Bot':
-          print(f'Bot Player #{player.playerID}: {player.hand}, {player.num_dice_unseen} unseen dice')
-    elif NUM_HUMANS == 1:
-      for player in player_list:
-        if player.player_type == 'Bot':
-          hidden_hand = ['X'] * len(player.hand)
-          print(f'Bot Player #{player.playerID}: {hidden_hand}, {player.num_dice_unseen} unseen dice')
-        else:
-          print(f'Human Player #{player.playerID}: {player.hand}, {player.num_dice_unseen} unseen dice')
+    if verbose:
+        print("---------------------------------------------------------------------------------------------------")
+        print("ROUND " + str(round))
+    if verbose:
+        if NUM_HUMANS == 0:
+          for player in player_list:
+            if player.player_type == 'Bot':
+              print(f'Bot Player #{player.playerID}: {player.hand}, {player.num_dice_unseen} unseen dice')
+        elif NUM_HUMANS == 1:
+          for player in player_list:
+            if player.player_type == 'Bot':
+              hidden_hand = ['X'] * len(player.hand)
+              print(f'Bot Player #{player.playerID}: {hidden_hand}, {player.num_dice_unseen} unseen dice')
+            else:
+              print(f'Human Player #{player.playerID}: {player.hand}, {player.num_dice_unseen} unseen dice')
     i = 0
     prev_a = None
     end_round = False
@@ -538,7 +605,8 @@ def runGame(verbose: int = 0):
         previous_player = player_list[previous_index]
         index_current = index
 
-        print(f'\nPlayer ID: {player.playerID}')
+        if verbose:
+          print(f'\nPlayer ID: {player.playerID}')
         if player.player_type == 'Human':
           print('Hand: {}'.format(player.hand))
           a = player.action(prev_a, plot=True)
@@ -548,7 +616,8 @@ def runGame(verbose: int = 0):
         last_play = prev_a
         prev_a = a
 
-        print('turn {}: {}'.format(i, a))
+        if verbose:
+          print('turn {}: {}'.format(i, a))
 
         i += 1
 
@@ -591,14 +660,16 @@ def runGame(verbose: int = 0):
 
         if total_count < last_play['quantity'] and player_bullshit_called_on != None:
           player_list[previous_index].hand = player_list[previous_index].hand[1:]
-          print(f'{total_count} {last_play["dice"]}s total < Player {player_list[previous_index].playerID}\'s bet of {last_play["quantity"]} {last_play["dice"]}s')
-          print(f'Player {player_list[previous_index].playerID} loses a die')
+          if verbose:
+              print(f'{total_count} {last_play["dice"]}s total < Player {player_list[previous_index].playerID}\'s bet of {last_play["quantity"]} {last_play["dice"]}s')
+              print(f'Player {player_list[previous_index].playerID} loses a die')
           total_dice_left = total_dice_left - 1
           starting_player_index = previous_index
         elif total_count >= last_play['quantity'] and player_bullshit_called_on != None:
           player_list[index_current].hand = player_list[index_current].hand[1:]
-          print(f'{total_count} {last_play["dice"]}s total >= Player {player_list[previous_index].playerID}\'s bet of {last_play["quantity"]} {last_play["dice"]}s')
-          print("Player " + str(player_list[index_current].playerID) + " loses a die")
+          if verbose:
+              print(f'{total_count} {last_play["dice"]}s total >= Player {player_list[previous_index].playerID}\'s bet of {last_play["quantity"]} {last_play["dice"]}s')
+              print("Player " + str(player_list[index_current].playerID) + " loses a die")
           total_dice_left = total_dice_left - 1
           starting_player_index = index_current
     elif last_play['exactly']:
@@ -610,17 +681,20 @@ def runGame(verbose: int = 0):
             if len(player_list[index_current].hand) < 5:
                 player_list[index_current].hand = np.append(player_list[index_current].hand, 0)  # Add a die
                 total_dice_left = total_dice_left + 1
-                print(f'{total_count} {last_play["dice"]}s total == Player {player_list[index_current].playerID}\'s exactly bet of {last_play["quantity"]} {last_play["dice"]}s')
-                print(f'Player {player_list[index_current].playerID} wins a die')
+                if verbose:
+                    print(f'{total_count} {last_play["dice"]}s total == Player {player_list[index_current].playerID}\'s exactly bet of {last_play["quantity"]} {last_play["dice"]}s')
+                    print(f'Player {player_list[index_current].playerID} wins a die')
                 starting_player_index = index_current
             else:
-              print(f'Player {player_list[index_current].playerID} has 5 die so didn\'t gain a die')
+              if verbose:
+                print(f'Player {player_list[index_current].playerID} has 5 die so didn\'t gain a die')
               starting_player_index = index_current
         else:
             player_list[index_current].hand = player_list[index_current].hand[1:]  # Remove a die
             total_dice_left = total_dice_left - 1
-            print(f'{total_count} {last_play["dice"]}s total != Player {player_list[index_current].playerID}\'s exactly bet of {last_play["quantity"]} {last_play["dice"]}s')
-            print(f'Player {player_list[index_current].playerID} loses a die')
+            if verbose:
+                print(f'{total_count} {last_play["dice"]}s total != Player {player_list[index_current].playerID}\'s exactly bet of {last_play["quantity"]} {last_play["dice"]}s')
+                print(f'Player {player_list[index_current].playerID} loses a die')
             starting_player_index = index_current
 
     ##################################################
@@ -633,28 +707,28 @@ def runGame(verbose: int = 0):
       player.hand = np.random.randint(1, DICE_SIDES + 1, player.hand.size)
       player.calculate_cond_dist(num_dice_unseen = total_dice_left - player.hand.size)
 
-  return player_list[0].playerID, parameters_of_interest
+  return player_list[0].playerID, parameters_of_interest, player_output_list
 
 
 
 if __name__ == '__main__':
     winners = []
-    max_games = 100
-    with open('risk_prob.csv', 'w', newline='') as csvfile:
+    max_games = 5000
+    parameter_of_interest_name = 'bs_prob'
+    with open('simulation_results/{}_{}.csv'.format(parameter_of_interest_name, datetime.now().strftime("%d%m%Y%H%M%S")), 'w', newline='') as csvfile:
         csvwriter = csv.writer(csvfile, delimiter=',')
-        csvwriter.writerow(['call_bullshit_threshold', 'win_bool'])
+        csvwriter.writerow(['player_id', '{}_threshold'.format(parameter_of_interest_name), 'win_bool'])
         for i, games in enumerate(range(max_games)):
-          gameWin, params = runGame(verbose=0)
+          gameWin, params, player_order = runGame(verbose=0)
           print(f'({i + 1}/{max_games}) PLAYER {gameWin} WINS')
           for i, param in enumerate(params):
-            player_id = i + 1
-            if player_id == gameWin:
-              csvwriter.writerow([round(param, 3), 1])
+            if player_order[i] == gameWin:
+              csvwriter.writerow([player_order[i], round(param, 3), 1])
             else:
-              csvwriter.writerow([round(param, 3), 0])
+              csvwriter.writerow([player_order[i], round(param, 3), 0])
         winners.append(gameWin)
 
-    Counter(winners)
+        Counter(winners)
 
 
 
