@@ -290,54 +290,60 @@ class HumanPlayer(Player):
       plot_distributions(cond_distributions=self.conditional_dist,
                            player_id=self.playerID)
     invalid_call = True
+    action = None
     while invalid_call:
         player_call = input('Play Format: \{quantity\} \{number\} OR \'bs\' OR \'exactly\':    ')
-        if prev_action is not None:
-          if player_call == 'bs':  # BS
-            invalid_call = False
-            action = prev_action
-            action.update({'bs': True})
-          elif player_call == 'exactly':  # Exactly
-            if self.num_dice_unseen + self.hand.size >= MAX_TOTAL_DICE / 2:
+        if prev_action is not None:  # Not first play
+            if player_call == 'bs':  # BS
                 invalid_call = False
                 action = prev_action
-                action.update({'exactly': True})
-            else:
-                invalid_reason = 'Not enough dice for exactly.'
-          elif len([int(i) for i in player_call.split() if i.isdigit()]) == 2:  # RAISE
-            raise_call = [int(i) for i in player_call.split() if i.isdigit()]
-            quantity = raise_call[0]
-            dice = raise_call[1]
-            if prev_action['dice'] == 1:
-              if dice == 1 and quantity > prev_action['quantity']:
-                  invalid_call = False
-              elif 2 <= dice <= 6 and quantity >= 2*prev_action['quantity'] + 1:
-                  invalid_call = False
-              else:
-                invalid_reason = f'After {prev_action["quantity"]} aces, lowest call is \
-                  {prev_action["quantity"] + 1} aces or {2*prev_action["quantity"] + 1} 2s'
-              if invalid_call:
-                  print('ERROR: INVALID CALL. {}. Got: {}'.format(invalid_reason, raise_call))
-              else:
-                  action = {'quantity': quantity, 'dice': dice, 'bs': False, 'exactly': False}
-            elif 2 <= prev_action['dice'] <= 6:
-              if dice == 1 and quantity >= prev_action['quantity'] / 2:
-                invalid_call = False
-              elif quantity == prev_action['quantity'] and dice >= prev_action['dice']:
-                invalid_call = False
-              elif quantity > prev_action['quantity']:
-                invalid_call = False
-              else:
-                if prev_action['dice'] == 6:
-                  invalid_reason = f'After {prev_action["quantity"]} 6s, lowest call is \
-                    {prev_action["quantity"] + 1} 2s or {int(np.ceil(prev_action["quantity"] / 2))} 1s'
+                action.update({'bs': True})
+            elif player_call == 'exactly':  # Exactly
+                if self.num_dice_unseen + self.hand.size >= MAX_TOTAL_DICE / 2:
+                    invalid_call = False
+                    action = prev_action
+                    action.update({'exactly': True})
                 else:
-                  invalid_reason = f'After {prev_action["quantity"]} {prev_action["dice"]}s, lowest call is \
-                    {prev_action["quantity"]} {prev_action["dice"] + 1}s or \
-                    {int(np.ceil(prev_action["quantity"] / 2))} 1s'
-          else:
-            invalid_reason = f'What is that? Try again.'
-        else:
+                    invalid_reason = 'Not enough dice for exactly.'
+            elif len([int(i) for i in player_call.split() if i.isdigit()]) == 2:  # RAISE
+                raise_call = [int(i) for i in player_call.split() if i.isdigit()]
+                quantity = raise_call[0]
+                dice = raise_call[1]
+                if prev_action['dice'] == 1:
+                    if dice == 1 and quantity > prev_action['quantity']:
+                        invalid_call = False
+                    elif 2 <= dice <= 6 and quantity >= 2*prev_action['quantity'] + 1:
+                        invalid_call = False
+                    else:
+                        invalid_reason = f'After {prev_action["quantity"]} aces, lowest call is \
+                                           {prev_action["quantity"] + 1} aces or {2*prev_action["quantity"] + 1} 2s'
+                elif 2 <= prev_action['dice'] <= 6:
+                    if dice == 1 and quantity >= prev_action['quantity'] / 2:
+                        invalid_call = False
+                    elif quantity == prev_action['quantity'] and dice >= prev_action['dice']:
+                        invalid_call = False
+                    elif quantity > prev_action['quantity']:
+                        invalid_call = False
+                    else:
+                        if prev_action['dice'] == 6:
+                            invalid_reason = f'After {prev_action["quantity"]} 6s, lowest call is \
+                                               {prev_action["quantity"] + 1} 2s or {int(np.ceil(prev_action["quantity"] / 2))} 1s'
+                        else:
+                            invalid_reason = f'After {prev_action["quantity"]} {prev_action["dice"]}s, lowest call is \
+                                                {prev_action["quantity"]} {prev_action["dice"] + 1}s or \
+                                                {int(np.ceil(prev_action["quantity"] / 2))} 1s'
+                else:
+                    invalid_reason = 'Dice must be within 1 and 6.'
+
+                if invalid_call:
+                    print('ERROR: INVALID CALL. {}. Got: {}'.format(invalid_reason, raise_call))
+                else:
+                    action = {'quantity': quantity, 'dice': dice, 'bs': False, 'exactly': False}
+
+            else:  # Not BS, Exactly, or Raise
+                invalid_reason = f'What is that? Try again.'
+                print('ERROR: INVALID CALL. {}. Got: {}'.format(invalid_reason, raise_call))
+        else:  # First play
           if len([int(i) for i in player_call.split() if i.isdigit()]) == 2:  # RAISE
             raise_call = [int(i) for i in player_call.split() if i.isdigit()]
             quantity = raise_call[0]
@@ -348,10 +354,11 @@ class HumanPlayer(Player):
               invalid_reason = 'Dice must be within 1 and 6.'
           else:
             invalid_reason = 'Must start with 2 integers.'
+
           if invalid_call:
             print('ERROR: INVALID CALL. {}. Got: {}'.format(invalid_reason, raise_call))
           else:
-              action = {'quantity': quantity, 'dice': dice, 'bs': False, 'exactly': False}
+            action = {'quantity': quantity, 'dice': dice, 'bs': False, 'exactly': False}
 
     return action
 
@@ -551,10 +558,10 @@ def runGame(verbose: int = 0):
   player_metadata = []
   shuffled_player_types = random.sample(player_types, len(player_types))  # Shuffle player types
   for i, player_type in enumerate(shuffled_player_types):
-      if i == 1:
-        trust = 0  # PARAMETER OF INTEREST: trustability
+      if i == 0:
+        trust = 1  # PARAMETER OF INTEREST: trustability
       else:
-        trust = 0
+        trust = 1
 
       h = np.random.randint(1, DICE_SIDES + 1, MAX_DICE_PER_PLAYER)
       if player_type == 'BOT':
@@ -575,18 +582,20 @@ def runGame(verbose: int = 0):
 
   round = 0
   starting_player_index = 0  # Player 1 starts first round
-  while(len(player_list) > 1):
+  rotated_player_list = player_list
+  while(len(rotated_player_list) > 1):
     round = round + 1
+    rotated_player_list = rotated_player_list[starting_player_index % len(rotated_player_list):] + rotated_player_list[:starting_player_index]
     if verbose:
         print("---------------------------------------------------------------------------------------------------")
         print("ROUND " + str(round))
     if verbose:
         if NUM_HUMANS == 0:
-          for player in player_list:
+          for player in rotated_player_list:
             if player.player_type == 'Bot':
               print(f'Bot Player #{player.playerID}: {player.hand}, {player.num_dice_unseen} unseen dice')
         elif NUM_HUMANS == 1:
-          for player in player_list:
+          for player in rotated_player_list:
             if player.player_type == 'Bot':
               hidden_hand = ['X'] * len(player.hand)
               print(f'Bot Player #{player.playerID}: {hidden_hand}, {player.num_dice_unseen} unseen dice')
@@ -596,16 +605,15 @@ def runGame(verbose: int = 0):
     prev_a = None
     end_round = False
     number_counter = [0] * 6  # To keep track of what's been said
-    rotated_player_list = player_list[starting_player_index % len(player_list):] + player_list[:starting_player_index]
     while end_round == False:
       # Use % to loop i.e.:
       for index, player in enumerate(rotated_player_list):
         if NUM_HUMANS > 0:  # If a human is playing, delay the bots' plays for a better playing experience
           print('...')
           time.sleep(3)
-        # Indexes and player IDs are not the same: player_ID = index + 1
-        previous_index = index - 1 % len(player_list)
-        previous_player = player_list[previous_index]
+        # Indexes and player IDs are not the same
+        previous_index = index - 1 % len(rotated_player_list)
+        previous_player = rotated_player_list[previous_index]
         index_current = index
 
         if verbose:
@@ -644,7 +652,7 @@ def runGame(verbose: int = 0):
           break
 
         number_counter[a['dice'] - 1] += 1
-        for other_player in player_list:
+        for other_player in rotated_player_list:
           if other_player == player: continue
           other_player.calculate_conditional_distributions(cumulative_calls_list=number_counter)
 
@@ -658,66 +666,66 @@ def runGame(verbose: int = 0):
 
     if NUM_HUMANS > 0:  # Reveal everyones hands
       print('\nREVEAL:')
-      for player in player_list:
+      for player in rotated_player_list:
         print(f'{player.player_type} Player #{player.playerID}: {player.hand}')
 
     player_starts_next_round = None
     if last_play['bs']:
         count = 0
-        dice_counts = Counter([number for player in player_list for number in player.hand])
+        dice_counts = Counter([number for player in rotated_player_list for number in player.hand])
         total_count = int(dice_counts[1]) if last_play['dice'] == 1 else (dice_counts[last_play['dice']]) + int(dice_counts[1])
-        player_bullshit_called_on = player_list[(bullshit_caller_player_list_index - 1) % len(player_list)]
+        player_bullshit_called_on = rotated_player_list[(bullshit_caller_player_list_index - 1) % len(rotated_player_list)]
 
         if total_count < last_play['quantity'] and player_bullshit_called_on != None:
-          player_list[previous_index].hand = player_list[previous_index].hand[1:]
+          rotated_player_list[previous_index].hand = rotated_player_list[previous_index].hand[1:]
           if verbose:
-              print(f'{total_count} {last_play["dice"]}s total < Player {player_list[previous_index].playerID}\'s bet of {last_play["quantity"]} {last_play["dice"]}s')
-              print(f'Player {player_list[previous_index].playerID} loses a die')
+              print(f'{total_count} {last_play["dice"]}s total < Player {rotated_player_list[previous_index].playerID}\'s bet of {last_play["quantity"]} {last_play["dice"]}s')
+              print(f'Player {rotated_player_list[previous_index].playerID} loses a die')
           total_dice_left = total_dice_left - 1
           starting_player_index = previous_index
         elif total_count >= last_play['quantity'] and player_bullshit_called_on != None:
-          player_list[index_current].hand = player_list[index_current].hand[1:]
+          rotated_player_list[index_current].hand = rotated_player_list[index_current].hand[1:]
           if verbose:
-              print(f'{total_count} {last_play["dice"]}s total >= Player {player_list[previous_index].playerID}\'s bet of {last_play["quantity"]} {last_play["dice"]}s')
-              print("Player " + str(player_list[index_current].playerID) + " loses a die")
+              print(f'{total_count} {last_play["dice"]}s total >= Player {rotated_player_list[previous_index].playerID}\'s bet of {last_play["quantity"]} {last_play["dice"]}s')
+              print("Player " + str(rotated_player_list[index_current].playerID) + " loses a die")
           total_dice_left = total_dice_left - 1
           starting_player_index = index_current
     elif last_play['exactly']:
         count = 0
-        dice_counts = Counter([number for player in player_list for number in player.hand])
+        dice_counts = Counter([number for player in rotated_player_list for number in player.hand])
         total_count = int(dice_counts[1]) if last_play['dice'] == 1 else (dice_counts[last_play['dice']]) + int(dice_counts[1])
 
         if total_count == last_play['quantity']:
-            if len(player_list[index_current].hand) < 5:
-                player_list[index_current].hand = np.append(player_list[index_current].hand, 0)  # Add a die
+            if len(rotated_player_list[index_current].hand) < 5:
+                rotated_player_list[index_current].hand = np.append(rotated_player_list[index_current].hand, 0)  # Add a die
                 total_dice_left = total_dice_left + 1
                 if verbose:
-                    print(f'{total_count} {last_play["dice"]}s total == Player {player_list[index_current].playerID}\'s exactly bet of {last_play["quantity"]} {last_play["dice"]}s')
-                    print(f'Player {player_list[index_current].playerID} wins a die')
+                    print(f'{total_count} {last_play["dice"]}s total == Player {rotated_player_list[index_current].playerID}\'s exactly bet of {last_play["quantity"]} {last_play["dice"]}s')
+                    print(f'Player {rotated_player_list[index_current].playerID} wins a die')
                 starting_player_index = index_current
             else:
               if verbose:
-                print(f'Player {player_list[index_current].playerID} has 5 die so didn\'t gain a die')
+                print(f'Player {rotated_player_list[index_current].playerID} has 5 die so didn\'t gain a die')
               starting_player_index = index_current
         else:
-            player_list[index_current].hand = player_list[index_current].hand[1:]  # Remove a die
+            rotated_player_list[index_current].hand = rotated_player_list[index_current].hand[1:]  # Remove a die
             total_dice_left = total_dice_left - 1
             if verbose:
-                print(f'{total_count} {last_play["dice"]}s total != Player {player_list[index_current].playerID}\'s exactly bet of {last_play["quantity"]} {last_play["dice"]}s')
-                print(f'Player {player_list[index_current].playerID} loses a die')
+                print(f'{total_count} {last_play["dice"]}s total != Player {rotated_player_list[index_current].playerID}\'s exactly bet of {last_play["quantity"]} {last_play["dice"]}s')
+                print(f'Player {rotated_player_list[index_current].playerID} loses a die')
             starting_player_index = index_current
 
     ##################################################
-    player_list = [player for player in player_list if player.hand.size > 0]
+    rotated_player_list = [player for player in rotated_player_list if player.hand.size > 0]
 
     # If player who starts next round is out, the next remaining player starts
-    starting_player_index = starting_player_index % len(player_list)
+    starting_player_index = starting_player_index % len(rotated_player_list)
 
-    for player in player_list:
+    for player in rotated_player_list:
       player.hand = np.random.randint(1, DICE_SIDES + 1, player.hand.size)
       player.calculate_cond_dist(num_dice_unseen = total_dice_left - player.hand.size)
 
-  game_metadata = {'game_playerid_winner': player_list[0].playerID,
+  game_metadata = {'game_playerid_winner': rotated_player_list[0].playerID,
                    'player_metadata': player_metadata}
   return game_metadata
 
