@@ -473,15 +473,29 @@ def get_exactly_distributions(player_hand: List[int], num_dice_unseen: int = 15)
 
   return conditional_exactly_distributions_list_of_lists
 
-def get_conditional_distribution_for_number(player_hand: List[int], number: int, num_dice_unseen: int = 10, wild_prob: float = 1/6, other_prob: float = 1/3):
+def get_conditional_distribution_for_number(player_hand: List[int], number_to_plot: int, num_dice_unseen: int = 10, wild_prob: float = 1/6, other_prob: float = 1/3):
     """
     Usage:
     hand = [4, 3, 1, 2, 1]
     number_to_plot = 3
     cond_distribution_3s = get_conditional_distribution_for_number(player_hand=hand, number=number_to_plot, num_dice_unseen=10)
     """
-    count_in_hand = Counter(player_hand).get(number, 0)
-    number_prob = wild_prob if number == 1 else other_prob
+    counts_of_numbers = Counter(player_hand)
+    conditional_distributions_list_of_lists = []
+    for number in range(1, DICE_SIDES + 1):
+        # count quantity of dice in hand
+        if number_to_plot in list(counts_of_numbers.keys()):
+            count_in_hand = counts_of_numbers[number_to_plot]
+        else:
+            count_in_hand = 0
+
+        # Include aces in the count for non-aces
+        if number_to_plot != 1 and 1 in list(counts_of_numbers.keys()):
+            count_in_hand += counts_of_numbers[1]
+
+    print(f'Count in hand: {count_in_hand}')
+
+    number_prob = wild_prob if number_to_plot == 1 else other_prob
 
     unconditional_probabilities = [
         1 - binom.cdf(n=num_dice_unseen, p=number_prob, k=x) +
@@ -489,21 +503,25 @@ def get_conditional_distribution_for_number(player_hand: List[int], number: int,
         for x in range(1, num_dice_unseen + 1)
     ]
 
-    conditional_probabilities = [
-        1.0] * (count_in_hand + 1) + [-1.0] * len(unconditional_probabilities) + [0.0] * (len(player_hand) - count_in_hand)
+    print(unconditional_probabilities)
+
+    conditional_probabilities = [1.0] * (count_in_hand) + [-1.0] * len(unconditional_probabilities) + [0.0] * (len(player_hand) - count_in_hand)
 
     for i, prob in enumerate(unconditional_probabilities):
         if i > num_dice_unseen + len(player_hand):
             break
-        conditional_probabilities[i + count_in_hand + 1] = prob
+        conditional_probabilities[i + count_in_hand] = prob
+    print(conditional_probabilities)
 
     # Plotting as a red bar graph
-    plt.bar(range(1, len(conditional_probabilities) + 1), conditional_probabilities, label=f'Number {number}', color='red')
+    fig, ax = plt.subplots(1, 1)
+    plt.bar(range(1, len(conditional_probabilities) + 1), conditional_probabilities, label=f'Number {number_to_plot}', color='cornflowerblue')
 
     plt.xlabel('Count of Dice')
     plt.ylabel('Probability')
-    plt.title(f'Conditional Distribution for Number {number} in Player Hand')
+    plt.title(f'Conditional Distribution for Number {number_to_plot} in All Dice')
     plt.legend()
+    ax.set_xticks(ticks=range(num_dice_unseen + len(player_hand) + 1))
     plt.show()
 
     return conditional_probabilities
