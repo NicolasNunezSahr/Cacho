@@ -565,7 +565,7 @@ def runGame(verbose: int = 0):
   r = 0.37  # risk / bullshit threshold
   l = 0.8  # likely threshold
   e = 0.4  # exactly threshold
-  bt = 0.37 # bluff threshold
+  bt = 0.5 # bluff threshold
   bp = 0.2 # bluff probability
   trust = 1.0  # trustability
   player_list = []
@@ -578,8 +578,12 @@ def runGame(verbose: int = 0):
   for i, player_type in enumerate(shuffled_player_types):
       if i == 0:
         trust = 1  # PARAMETER OF INTEREST: trustability
+      elif i == 1:
+        trust = 0.5
+      elif i == 2:
+        trust = 0
       else:
-        trust = 1
+        trust = 2
 
       h = np.random.randint(1, DICE_SIDES + 1, MAX_DICE_PER_PLAYER)
       if player_type == 'BOT':
