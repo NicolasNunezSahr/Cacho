@@ -755,7 +755,7 @@ def runGame(verbose: int = 0):
 
 if __name__ == '__main__':
     winners = []
-    max_games = 5000
+    max_games = 1
     file_name = 'simulation_results/cacho_{}.csv'.format(datetime.now().strftime("%d%m%Y%H%M%S"))
     with open(file_name, 'w', newline='') as csvfile:
         print('Saving results to: {}'.format(file_name))
