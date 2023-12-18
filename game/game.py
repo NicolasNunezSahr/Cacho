@@ -76,6 +76,8 @@ class Player:
 
       counts_of_numbers = Counter(self.hand)
       conditional_number_probs = []
+      cumulative_calls_for_list = []
+      cumulative_calls_against_list = []
       for number in range(1, DICE_SIDES + 1):
         # count quantity of dice in hand
         if number in list(counts_of_numbers.keys()):
@@ -91,16 +93,19 @@ class Player:
         if number == 1:
           number_prob = 1 / 6
           cumulative_calls_for = cumulative_calls_list[number - 1]
-          cumulative_calls_against = (1 / 2) *  (number_prob) * sum(cumulative_calls_list[1:])
+          cumulative_calls_against = (1 / 2) * number_prob * sum(cumulative_calls_list[1:])
         else:
           number_prob = 1 / 3
           cumulative_calls_for = cumulative_calls_list[number - 1] + cumulative_calls_list[1 - 1]
           if number < 6:
-            cumulative_calls_against = (number_prob) * sum(cumulative_calls_list[1:number - 1] + cumulative_calls_list[number:])
+            cumulative_calls_against = number_prob * sum(cumulative_calls_list[1:number - 1] + cumulative_calls_list[number:])
           else:
             cumulative_calls_against = (number_prob) * sum(cumulative_calls_list[1:5])
+
+        cumulative_calls_for_list.append(cumulative_calls_for)
+        cumulative_calls_against_list.append(cumulative_calls_against)
         alpha = (self.num_dice_unseen * number_prob) + (self.trustability * cumulative_calls_for)
-        beta = self.num_dice_unseen * (1 -  number_prob) + (self.trustability * cumulative_calls_against)
+        beta = self.num_dice_unseen * (1 - number_prob) + (self.trustability * cumulative_calls_against)
         conditional_number_prob = alpha / (alpha + beta)
         conditional_number_probs.append(conditional_number_prob)
 
@@ -110,9 +115,9 @@ class Player:
       #                                         np.sum(conditional_number_probs) / ((1/6) + (5 * (1/3))))
       conditional_number_probs_st = conditional_number_probs
       conditional_distributions_list_of_lists = []
-      for number in range(1, DICE_SIDES + 1):
+      for i, number in enumerate(range(1, DICE_SIDES + 1)):
         if self.verbose > 1:
-          print(f'{self.playerID}: d = {number}: calls for / calls against = {cumulative_calls_for} / {cumulative_calls_against} -> prob = {conditional_number_prob}')
+          print(f'{self.playerID}: d = {number}: calls for / calls against = {cumulative_calls_for_list[i]} / {cumulative_calls_against_list[i]} -> prob = {conditional_number_probs[i]}')
 
         # These are the unconditional probabilities of the unseen dice
         # TODO: still need to standardize
@@ -162,6 +167,25 @@ class Player:
     idx = np.unravel_index(idx_flat, m.shape)
     return max_prob, idx
 
+  def _get_aggressive_start(self, m):
+      mask = m > 0.54
+      candidate_indices = np.where(mask)
+      combined_indices = list(zip(candidate_indices[0], candidate_indices[1]))
+      aggressive_idx = random.choice(combined_indices)
+      aggresive_prob = m[aggressive_idx[0], aggressive_idx[1]]
+      # largest_quantity = 1
+      # selected_call_index = None
+      # for i, candidate_quantity in enumerate(candidate_indices[1]):
+      #     if candidate_quantity > largest_quantity:
+      #         largest_quantity = candidate_quantity
+      #         selected_call_index = i
+      #
+      # aggressive_idx = combined_indices[selected_call_index]
+      # aggresive_prob = m[aggressive_idx[0], aggressive_idx[1]]
+
+      print('Agg_idx: {}; aggressive_prob: {}'.format(aggressive_idx, aggresive_prob))
+      return aggresive_prob, aggressive_idx
+
   def _get_bluff_call(self, m):
     # zero out highest probability call
     max_prob, idx = self._get_highest_probability_call(m)
@@ -180,9 +204,12 @@ class Player:
     bluff_prob = m[bluff_idx[0], bluff_idx[1]]
     return bluff_prob, bluff_idx
 
-  def first_action(self):
+  def first_action(self, gordo=True):
     cda_mat = self.conditional_dist[:,1:].copy()
     max_prob, idx = self._get_highest_probability_call(cda_mat)
+    if gordo:
+        print('gordo')
+        max_prob, idx = self._get_aggressive_start(cda_mat)
     return {'quantity': idx[1]+1, 'dice': idx[0]+1, 'bs': False, 'exactly': False}
 
   def action(self, prev_action=None, plot=False):
@@ -565,15 +592,15 @@ def runGame(verbose: int = 0):
   r = 0.37  # risk / bullshit threshold
   l = 0.8  # likely threshold
   e = 0.4  # exactly threshold
-  bt = 0.5 # bluff threshold
-  bp = 0.2 # bluff probability
+  bt = 0.5  # bluff threshold
+  bp = 0.2  # bluff probability
   trust = 1.0  # trustability
   player_list = []
   total_dice_left = MAX_TOTAL_DICE
-  game_metadata = []
 
   player_types = ['BOT'] * NUM_BOTS + ['HUMAN'] * NUM_HUMANS
   player_metadata = []
+  call_metadata = []
   shuffled_player_types = random.sample(player_types, len(player_types))  # Shuffle player types
   for i, player_type in enumerate(shuffled_player_types):
       if i == 0:
@@ -645,6 +672,8 @@ def runGame(verbose: int = 0):
           a = player.action(prev_a, plot=True)
         else:
           a = player.action(prev_a, plot=False)
+
+        # Set call metadata
 
         last_play = prev_a
         prev_a = a
@@ -762,7 +791,7 @@ if __name__ == '__main__':
         csvwriter = csv.writer(csvfile, delimiter=',')
         csvwriter.writerow(['player_id', 'risk_thres', 'likely_thres', 'exactly_thres', 'bluff_prob', 'bluff_thres', 'trustability', 'win_bool'])
         for i, games in enumerate(range(max_games)):
-          game_metadata = runGame(verbose=1)
+          game_metadata = runGame(verbose=2)
           gameWin = game_metadata["game_playerid_winner"]
           player_metadata = game_metadata["player_metadata"]
           if i % 10 == 0:
