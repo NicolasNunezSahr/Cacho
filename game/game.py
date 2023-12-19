@@ -16,7 +16,7 @@ import csv
 NUM_HUMANS = 1
 NUM_BOTS = 3
 NUM_PLAYERS = NUM_HUMANS + NUM_BOTS
-MAX_DICE_PER_PLAYER = 5
+MAX_DICE_PER_PLAYER = 3
 MAX_TOTAL_DICE = NUM_PLAYERS * MAX_DICE_PER_PLAYER
 DICE_SIDES = 6
 
@@ -187,7 +187,6 @@ class Player:
         # aggressive_idx = combined_indices[selected_call_index]
         # aggresive_prob = m[aggressive_idx[0], aggressive_idx[1]]
 
-        print('Agg_idx: {}; aggressive_prob: {}'.format(aggressive_idx, aggresive_prob))
         return aggresive_prob, aggressive_idx
 
     def _get_bluff_call(self, m):
@@ -208,12 +207,11 @@ class Player:
         bluff_prob = m[bluff_idx[0], bluff_idx[1]]
         return bluff_prob, bluff_idx
 
-    def first_action(self, gordo=True):
+    def first_action(self, aggressive_start=True):
         cda_mat = self.conditional_dist[:, 1:].copy()
-        max_prob, idx = self._get_highest_probability_call(cda_mat)
-        if gordo:
-            print('gordo')
-            max_prob, idx = self._get_aggressive_start(cda_mat)
+        call_prob, idx = self._get_highest_probability_call(cda_mat)
+        if aggressive_start:
+            call_prob, idx = self._get_aggressive_start(cda_mat)
         return {'quantity': idx[1] + 1, 'dice': idx[0] + 1, 'bs': False, 'exactly': False}
 
     def action(self, prev_action=None, plot=False):
@@ -341,7 +339,9 @@ class HumanPlayer(Player):
                     raise_call = [int(i) for i in player_call.split() if i.isdigit()]
                     quantity = raise_call[0]
                     dice = raise_call[1]
-                    if prev_action['dice'] == 1:
+                    if dice < 1 or dice > 6:
+                        invalid_reason = 'Dice must be within 1 and 6.'
+                    elif prev_action['dice'] == 1:
                         if dice == 1 and quantity > prev_action['quantity']:
                             invalid_call = False
                         elif 2 <= dice <= 6 and quantity >= 2 * prev_action['quantity'] + 1:
@@ -368,13 +368,16 @@ class HumanPlayer(Player):
                         invalid_reason = 'Dice must be within 1 and 6.'
 
                     if invalid_call:
-                        print('ERROR: INVALID CALL. {}. Got: {}'.format(invalid_reason, raise_call))
+                        pass
                     else:
                         action = {'quantity': quantity, 'dice': dice, 'bs': False, 'exactly': False}
 
                 else:  # Not BS, Exactly, or Raise
                     invalid_reason = f'What is that? Try again.'
-                    print('ERROR: INVALID CALL. {}. Got: {}'.format(invalid_reason, raise_call))
+
+                if invalid_call:
+                    print('ERROR: INVALID CALL. {} Got: {}'.format(invalid_reason, player_call))
+
             else:  # First play
                 if len([int(i) for i in player_call.split() if i.isdigit()]) == 2:  # RAISE
                     raise_call = [int(i) for i in player_call.split() if i.isdigit()]
@@ -664,8 +667,8 @@ def runGame(verbose: int = 0):
             direction_change = None
             while input_denied:
                 direction_change_text = input('You start. Do you want a direction change? (Type \'N\' to go to Player {}, '
-                                          'and \'Y\' to go to player {})'.format(rotated_player_list[1].playerID,
-                                                                                 rotated_player_list[len(rotated_player_list) - 1].playerID))
+                                          'and \'Y\' to go to player {}) '.format(rotated_player_list[1].playerID,
+                                                                                  rotated_player_list[len(rotated_player_list) - 1].playerID))
                 if direction_change_text in ['Y', 'N']:
                     input_denied = False
                     if direction_change_text == 'Y':
@@ -679,6 +682,9 @@ def runGame(verbose: int = 0):
         if direction_change:
             rotated_player_list = [rotated_player_list[0]] + list(reversed(rotated_player_list[1:]))
 
+        # Start round
+        if verbose:
+            print("\n ------------- ROUND {} ----------- ".format(str(round)))
         # Print out player order
         if verbose:
             if NUM_HUMANS == 0:
@@ -692,8 +698,6 @@ def runGame(verbose: int = 0):
                         print(f'Bot Player #{player.playerID}: {hidden_hand}, {player.num_dice_unseen} unseen dice')
                     else:
                         print(f'Human Player #{player.playerID}: {player.hand}, {player.num_dice_unseen} unseen dice')
-        if verbose:
-            print(" ------------- ROUND {} ----------- ".format(str(round)))
         i = 0
         prev_a = None
         end_round = False
@@ -841,7 +845,7 @@ if __name__ == '__main__':
             ['player_id', 'risk_thres', 'likely_thres', 'exactly_thres', 'bluff_prob', 'bluff_thres', 'trustability',
              'win_bool'])
         for i, games in enumerate(range(max_games)):
-            game_metadata = runGame(verbose=2)
+            game_metadata = runGame(verbose=1)
             gameWin = game_metadata["game_playerid_winner"]
             player_metadata = game_metadata["player_metadata"]
             if i % 10 == 0:
