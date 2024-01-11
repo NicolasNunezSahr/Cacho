@@ -16,7 +16,7 @@ import csv
 NUM_HUMANS = 1
 NUM_BOTS = 3
 NUM_PLAYERS = NUM_HUMANS + NUM_BOTS
-MAX_DICE_PER_PLAYER = 3
+MAX_DICE_PER_PLAYER = 5
 MAX_TOTAL_DICE = NUM_PLAYERS * MAX_DICE_PER_PLAYER
 DICE_SIDES = 6
 
@@ -117,7 +117,7 @@ class Player:
         conditional_number_probs_st = conditional_number_probs
         conditional_distributions_list_of_lists = []
         for i, number in enumerate(range(1, DICE_SIDES + 1)):
-            if self.verbose > 1:
+            if self.verbose > 2:
                 print(
                     f'{self.playerID}: d = {number}: calls for / calls against = {cumulative_calls_for_list[i]} / {cumulative_calls_against_list[i]} -> prob = {conditional_number_probs[i]}')
 
@@ -148,11 +148,11 @@ class Player:
 
         return conditional_distributions_list_of_lists
 
-    def recalculate_cond_dist(self, cumulative_calls_list: List[int]):
-        c = self.calculate_conditional_distributions(cumulative_calls_list=cumulative_calls_list)
-        self.conditional_dist = np.array(c)
-        self.num_dice_unseen = num_dice_unseen
-        self.num_dice_in_game = num_dice_unseen + len(self.hand)
+    # def recalculate_cond_dist(self, cumulative_calls_list: List[int]):
+    #     c = self.calculate_conditional_distributions(cumulative_calls_list=cumulative_calls_list)
+    #     self.conditional_dist = np.array(c)
+    #     self.num_dice_unseen = num_dice_unseen
+    #     self.num_dice_in_game = num_dice_unseen + len(self.hand)
 
     def calculate_cond_dist(self, num_dice_unseen):
         c = get_conditional_distributions(self.hand, num_dice_unseen)
@@ -172,20 +172,11 @@ class Player:
         return max_prob, idx
 
     def _get_aggressive_start(self, m):
-        mask = m > 0.54
+        mask = m > 0.63
         candidate_indices = np.where(mask)
         combined_indices = list(zip(candidate_indices[0], candidate_indices[1]))
         aggressive_idx = random.choice(combined_indices)
         aggresive_prob = m[aggressive_idx[0], aggressive_idx[1]]
-        # largest_quantity = 1
-        # selected_call_index = None
-        # for i, candidate_quantity in enumerate(candidate_indices[1]):
-        #     if candidate_quantity > largest_quantity:
-        #         largest_quantity = candidate_quantity
-        #         selected_call_index = i
-        #
-        # aggressive_idx = combined_indices[selected_call_index]
-        # aggresive_prob = m[aggressive_idx[0], aggressive_idx[1]]
 
         return aggresive_prob, aggressive_idx
 
@@ -218,37 +209,38 @@ class Player:
         if prev_action == None:
             return self.first_action()
 
-        ## create matrix with set of impossible calls zero-ed out
+        # create matrix with set of impossible calls zero-ed out
         d = prev_action['dice']
         q = prev_action['quantity']
         cda_mat = self.conditional_dist[:, 1:].copy()  # remove at least 0 col
         exa_prob = self.exactly_dist[d - 1, q]  # no column removal
 
-        if d == 1:
-            # here I removed , self.num_dice_in_game, this means if there are only a couple die
-            # in the game it would not need to double + 1 which would be a problem theoretically
+        cda_mat = self.exclude_unallowed_calls(cda_mat, prev_q=q, prev_d=d)
+        # if d == 1:
+        #     # here I removed , self.num_dice_in_game, this means if there are only a couple die
+        #     # in the game it would not need to double + 1 which would be a problem theoretically
+        #
+        #     # zero-out un-allowed non-ace calls
+        #     cda_mat[1:, :min(self.num_dice_in_game, q * 2 + 1) - 1] = -1.0
+        #
+        #     # Zero-out un-allowed ace calls
+        #     cda_mat[0, :min(self.num_dice_in_game, q)] = -1.0
+        #
+        # else:
+        #     # If q = 5 and d = 2, i.e. if I call 5 2's, you can still call 5 3's.
+        #     # So, the min quantity the next person can call is still q = 5.
+        #     # This is true unless d = 6, which is the highest number, but that's OK.
+        #
+        #     # Zero out unallowed non-ace calls
+        #     # any non-ace call w/ Q <= q - 1
+        #     cda_mat[1:, :max(min(self.num_dice_in_game, q - 1), 0), ] = -1.0
+        #     # any D <= d w/ Q = q
+        #     cda_mat[1:d, min(self.num_dice_in_game, q - 1)] = -1.0
+        #
+        #     # Zero out unallowed ace calls
+        #     cda_mat[0, :ceil(q / 2) - 1] = -1.0
 
-            # zero-out un-allowed non-ace calls
-            cda_mat[1:, :min(self.num_dice_in_game, q * 2 + 1) - 1] = -1.0
-
-            # Zero-out un-allowed ace calls
-            cda_mat[0, :min(self.num_dice_in_game, q)] = -1.0
-
-        else:
-            # If q = 5 and d = 2, i.e. if I call 5 2's, you can still call 5 3's.
-            # So, the min quantity the next person can call is still q = 5.
-            # This is true unless d = 6, which is the highest number, but that's OK.
-
-            # Zero out unallowed non-ace calls
-            # any non-ace call w/ Q <= q - 1
-            cda_mat[1:, :max(min(self.num_dice_in_game, q - 1), 0), ] = -1.0
-            # any D <= d w/ Q = q
-            cda_mat[1:d, min(self.num_dice_in_game, q - 1)] = -1.0
-
-            # Zero out unallowed ace calls
-            cda_mat[0, :ceil(q / 2) - 1] = -1.0
-
-        if self.verbose > 1:
+        if self.verbose > 2:
             print('Probabilities: {}'.format(cda_mat))
             if plot:
                 plot_distributions(cond_distributions=self.conditional_dist,
@@ -288,9 +280,9 @@ class Player:
         if self.verbose > 1:
             print(f'Probability of at least {q} {d}\'s = {prob_prev_action} > {self.risk_thres} -> RAISE')
 
-        # Exactly only an option if number of dice left is at least half of what you started with
+        # Exactly only an option if number of dice left is at least half of what you started with and >= 8
         # Call exactly if probability is above threshold, or if its more likely than best action
-        if self.num_dice_in_game >= (MAX_TOTAL_DICE / 2):
+        if self.num_dice_in_game >= (MAX_TOTAL_DICE / 2) and self.num_dice_in_game >= 8:
             if self.verbose > 1:
                 print(f'Probability of exactly {q} {d}\'s: {exa_prob}')
             if exa_prob > self.exactly_thres or (exa_prob > max_prob):
@@ -298,6 +290,30 @@ class Player:
 
         # else, make highest probability call
         return best_action
+
+    def exclude_unallowed_calls(self, cda_mat, prev_q, prev_d):
+        if prev_d == 1:
+
+            # zero-out un-allowed non-ace calls
+            cda_mat[1:, :min(self.num_dice_in_game, prev_q * 2 + 1) - 1] = -1.0
+
+            # Zero-out un-allowed ace calls
+            cda_mat[0, :min(self.num_dice_in_game, prev_q)] = -1.0
+
+        else:
+            # If q = 5 and d = 2, i.e. if I call 5 2's, you can still call 5 3's.
+            # So, the min quantity the next person can call is still q = 5.
+            # This is true unless d = 6, which is the highest number, but that's OK.
+
+            # Zero out unallowed non-ace calls
+            # any non-ace call w/ Q <= q - 1
+            cda_mat[1:, :max(min(self.num_dice_in_game, prev_q - 1), 0), ] = -1.0
+            # any D <= d w/ Q = q
+            cda_mat[1:prev_d, min(self.num_dice_in_game, prev_q - 1)] = -1.0
+
+            # Zero out unallowed ace calls
+            cda_mat[0, :ceil(prev_q / 2) - 1] = -1.0
+        return cda_mat
 
 
 class HumanPlayer(Player):
@@ -319,6 +335,9 @@ class HumanPlayer(Player):
         if plot:
             plot_distributions(cond_distributions=self.conditional_dist,
                                player_id=self.playerID)
+
+        self.print_probabilities(prev_action=prev_action)
+
         invalid_call = True
         action = None
         while invalid_call:
@@ -396,6 +415,29 @@ class HumanPlayer(Player):
                     action = {'quantity': quantity, 'dice': dice, 'bs': False, 'exactly': False}
 
         return action
+
+    def print_probabilities(self, prev_action):
+        cda_mat = self.conditional_dist[:, 1:].copy()
+        if prev_action is not None:
+            d = prev_action['dice']
+            q = prev_action['quantity']
+
+            # check risk threshold
+            prob_prev_action = self.conditional_dist[d - 1][q]
+            print(f'Previous call:\tProbability of at least {q} {d}\'s: {prob_prev_action}')
+
+            # Exactly only an option if number of dice left is at least half of what you started with
+            # Call exactly if probability is above threshold, or if its more likely than best action
+            if self.num_dice_in_game >= 8 and self.num_dice_unseen >= (MAX_TOTAL_DICE / 2):
+                exa_prob = self.exactly_dist[d - 1, q]
+                print(f'Probability of exactly {q} {d}\'s: {exa_prob}')
+
+            # Exclude unallowed calls
+            cda_mat = self.exclude_unallowed_calls(cda_mat, prev_q=q, prev_d=d)
+
+        # find highest probability call
+        max_prob, idx = self._get_highest_probability_call(cda_mat)
+        print(f'Highest Probability Action:\tProbability of at least {idx[1] + 1} {idx[0] + 1}\'s: {max_prob}')
 
     def calculate_cond_dist(self, num_dice_unseen):
         c = get_conditional_distributions(self.hand, num_dice_unseen)
@@ -605,11 +647,11 @@ def plot_distributions(cond_distributions: List[List[float]], player_id: int = 0
 
 def runGame(verbose: int = 0):
     # instantiate players
-    r = 0.37  # risk / bullshit threshold
+    r = 0.35  # risk / bullshit threshold
     l = 0.8  # likely threshold
-    e = 0.4  # exactly threshold
+    e = 0.3  # exactly threshold
     bt = 0.5  # bluff threshold
-    bp = 0.2  # bluff probability
+    bp = 0.25  # bluff probability
     trust = 1.0  # trustability
     player_list = []
     total_dice_left = MAX_TOTAL_DICE
@@ -622,9 +664,9 @@ def runGame(verbose: int = 0):
         if i == 0:
             trust = 1  # PARAMETER OF INTEREST: trustability
         elif i == 1:
-            trust = 0.5
+            trust = 1.25
         elif i == 2:
-            trust = 0
+            trust = 1.5
         else:
             trust = 2
 
@@ -659,28 +701,31 @@ def runGame(verbose: int = 0):
                               starting_player_index % len(rotated_player_list):] + rotated_player_list[
                                                                                    :starting_player_index]
         # Pick a direction of play
-        # If its a bot,
-        if rotated_player_list[0].player_type == 'Bot':
-            direction_change = random.randint(0, 1)
-        elif rotated_player_list[0].player_type == 'Human':
-            input_denied = True
-            direction_change = None
-            while input_denied:
-                direction_change_text = input('You start. Do you want a direction change? (Type \'N\' to go to Player {}, '
-                                          'and \'Y\' to go to player {}) '.format(rotated_player_list[1].playerID,
-                                                                                  rotated_player_list[len(rotated_player_list) - 1].playerID))
-                if direction_change_text in ['Y', 'N']:
-                    input_denied = False
-                    if direction_change_text == 'Y':
-                        direction_change = 1
+        # If its a bot, pick at random, if its a human let them pick
+        if len(rotated_player_list) > 2:  # Direction doesn't matter if there's only 2 players
+            direction_change = 0
+            if rotated_player_list[0].player_type == 'Bot':
+                direction_change = random.randint(0, 1)
+            # If its a human, ask what direction it wants to pick
+            elif rotated_player_list[0].player_type == 'Human':
+                input_denied = True
+                direction_change = None
+                while input_denied:
+                    direction_change_text = input('\nYou start. Your hand: {}. Do you want a direction change? (Type \'N\' to go to Player {}, '
+                                              'and \'Y\' to go to player {}) '.format(rotated_player_list[0].hand, rotated_player_list[1].playerID,
+                                                                                      rotated_player_list[len(rotated_player_list) - 1].playerID))
+                    if direction_change_text in ['Y', 'N']:
+                        input_denied = False
+                        if direction_change_text == 'Y':
+                            direction_change = 1
+                        else:
+                            direction_change = 0
                     else:
-                        direction_change = 0
-                else:
-                    print('Input denied. Type \'Y\' or \'N\'')
-        else:
-            print('Player type = {}'.format(rotated_player_list[0].player_type))
-        if direction_change:
-            rotated_player_list = [rotated_player_list[0]] + list(reversed(rotated_player_list[1:]))
+                        print('Input denied. Type \'Y\' or \'N\'')
+            else:
+                print('Player type = {}'.format(rotated_player_list[0].player_type))
+            if direction_change:
+                rotated_player_list = [rotated_player_list[0]] + list(reversed(rotated_player_list[1:]))
 
         # Start round
         if verbose:
@@ -717,7 +762,7 @@ def runGame(verbose: int = 0):
                     print(f'\nPlayer ID: {player.playerID}')
                 if player.player_type == 'Human':
                     print('Hand: {}'.format(player.hand))
-                    a = player.action(prev_a, plot=True)
+                    a = player.action(prev_a, plot=False)
                 else:
                     a = player.action(prev_a, plot=False)
 
