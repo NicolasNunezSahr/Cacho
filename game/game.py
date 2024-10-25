@@ -408,7 +408,8 @@ class HumanPlayer(Player):
                     else:
                         invalid_reason = 'Dice must be within 1 and 6.'
                 else:
-                    invalid_reason = 'Must start with 2 integers.'
+                    invalid_reason = 'Raise call is defined as 2 integers.'
+                    raise_call = player_call
 
                 if invalid_call:
                     print('ERROR: INVALID CALL. {}. Got: {}'.format(invalid_reason, raise_call))
@@ -657,7 +658,6 @@ def update_trustability(player_list, total_dice_left):
         if player.player_type == 'Bot':
             dice_removed_percent = 1 - (total_dice_left / MAX_TOTAL_DICE)
             player.trustability = player.trustability_start * (1 + dice_removed_percent)
-
 
 
 def runGame(verbose: int = 0):
