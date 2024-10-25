@@ -53,6 +53,7 @@ class Player:
         self.exactly_thres = exactly_thres
         self.bluff_thres = bluff_thres
         self.bluff_prob = bluff_prob
+        self.trustability_start = trustability
         self.trustability = trustability
         self.playerID = playerID
         self.player_type = 'Bot'
@@ -644,6 +645,20 @@ def plot_distributions(cond_distributions: List[List[float]], player_id: int = 0
     plt.legend()
     plt.show()
 
+def update_trustability(player_list, total_dice_left):
+    """
+    As there are fewer dice left, increase the trustability of each Bot so that they are better at the end game.
+    Linear factor: the bot should double their trustability by the time 5% of the total dice are left
+    :param player_list:
+    :param total_dice_left:
+    :return:
+    """
+    for player in player_list:
+        if player.player_type == 'Bot':
+            dice_removed_percent = 1 - (total_dice_left / MAX_TOTAL_DICE)
+            player.trustability = player.trustability_start * (1 + dice_removed_percent)
+
+
 
 def runGame(verbose: int = 0):
     # instantiate players
@@ -696,6 +711,8 @@ def runGame(verbose: int = 0):
     rotated_player_list = player_list
     while len(rotated_player_list) > 1:
         round = round + 1
+        # Update trustability
+        update_trustability(rotated_player_list, total_dice_left)
         # Rotate player list, start with the starting_player_index
         rotated_player_list = rotated_player_list[
                               starting_player_index % len(rotated_player_list):] + rotated_player_list[
