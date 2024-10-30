@@ -20,12 +20,25 @@ MAX_DICE_PER_PLAYER = 5
 MAX_TOTAL_DICE = NUM_PLAYERS * MAX_DICE_PER_PLAYER
 DICE_SIDES = 6
 
+
+class Color:
+    PURPLE = '\033[95m'
+    CYAN = '\033[96m'
+    DARKCYAN = '\033[36m'
+    BLUE = '\033[94m'
+    GREEN = '\033[92m'
+    YELLOW = '\033[93m'
+    RED = '\033[91m'
+    BOLD = '\033[1m'
+    UNDERLINE = '\033[4m'
+    END = '\033[0m'
+
 # random.seed(123)
 # Set round-specfic variables
-player_dice_left = MAX_DICE_PER_PLAYER
-total_dice_left = MAX_TOTAL_DICE
-unseen_dice_left = total_dice_left - player_dice_left  # 20 total dice of which 5 dice are seen and the rest unseen
-player_hand = sorted([random.randint(1, DICE_SIDES) for x in range(player_dice_left)])
+# player_dice_left = MAX_DICE_PER_PLAYER
+# total_dice_left = MAX_TOTAL_DICE
+# unseen_dice_left = total_dice_left - player_dice_left  # 20 total dice of which 5 dice are seen and the rest unseen
+# player_hand = sorted([random.randint(1, DICE_SIDES) for x in range(player_dice_left)])
 
 
 class Player:
@@ -61,11 +74,12 @@ class Player:
         self.num_dice_in_game = num_dice_unseen + len(self.hand)
         self.conditional_dist = None
         self.exactly_dist = None
+        self.my_calls_this_round = [0] * DICE_SIDES
 
         self.calculate_cond_dist(num_dice_unseen)
         self.calculate_exactly_dist(num_dice_unseen)
 
-    def calculate_conditional_distributions(self, cumulative_calls_list: List[int]):
+    def calculate_conditional_distributions(self, cumulative_calls_list: List[int], use_beta_updating=True):
         """
       Given this player's hand and the number of unseen dice, return a list of
       length equal to the number of sides of a die (i.e. 6), where each of these
@@ -74,11 +88,21 @@ class Player:
       Usage: self.calculate_conditional_distributions()
 
       """
+        cumulative_calls_of_others_list = [cumulative_calls_list[i] - self.my_calls_this_round[i]
+                                           for i, die in enumerate(cumulative_calls_list)]
+        if self.verbose > 2:
+            print(f'Player ID: {self.playerID}\n'
+                  f'\tCumulative calls list: {cumulative_calls_list}\n'
+                  f'\tMy calls this round list: {self.my_calls_this_round}\n'
+                  f'\tCalls of others list: {cumulative_calls_of_others_list}')
 
         counts_of_numbers = Counter(self.hand)
         conditional_number_probs = []
         cumulative_calls_for_list = []
         cumulative_calls_against_list = []
+        alphas = []
+        betas = []
+        counts_in_hand = []
         for number in range(1, DICE_SIDES + 1):
             # count quantity of dice in hand
             if number in list(counts_of_numbers.keys()):
@@ -92,24 +116,29 @@ class Player:
 
             # Aces are wild
             if number == 1:
+                # If I make any non-ace call, I may still have aces, since aces count as all non-ace cards. Therefore,
+                # if I make any non-ace call, that only counts as half a non-ace call.
+                # TODO: Insight: if a specific user switches their call from one non-ace to another, that suggests they
+                # TODO: have aces. The probability of aces then should increase.
                 number_prob = 1 / 6
-                cumulative_calls_for = cumulative_calls_list[number - 1]
-                cumulative_calls_against = (1 / 2) * number_prob * sum(cumulative_calls_list[1:])
+                cumulative_calls_for = cumulative_calls_of_others_list[number - 1]
+                cumulative_calls_against = (1 / 2) * number_prob * sum(cumulative_calls_of_others_list[1:])
             else:
                 number_prob = 1 / 3
-                cumulative_calls_for = cumulative_calls_list[number - 1] + cumulative_calls_list[1 - 1]
-                if number < 6:
-                    cumulative_calls_against = number_prob * sum(
-                        cumulative_calls_list[1:number - 1] + cumulative_calls_list[number:])
-                else:
-                    cumulative_calls_against = (number_prob) * sum(cumulative_calls_list[1:5])
+                cumulative_calls_for = (cumulative_calls_of_others_list[number - 1] +
+                                        cumulative_calls_of_others_list[1 - 1])  # + Aces
+                cumulative_calls_against = number_prob * sum(
+                    cumulative_calls_of_others_list[1:number - 1] + cumulative_calls_of_others_list[number:])
 
             cumulative_calls_for_list.append(cumulative_calls_for)
             cumulative_calls_against_list.append(cumulative_calls_against)
             alpha = (self.num_dice_unseen * number_prob) + (self.trustability * cumulative_calls_for)
             beta = self.num_dice_unseen * (1 - number_prob) + (self.trustability * cumulative_calls_against)
             conditional_number_prob = alpha / (alpha + beta)
+            alphas.append(alpha)
+            betas.append(beta)
             conditional_number_probs.append(conditional_number_prob)
+            counts_in_hand.append(count_in_hand)
 
         # Standardize number probs so sum equals 1.85 = 1/6 + 5 * (1/3)
         # sum_to_one = np.sum([prob for prob in conditional_number_probs])
@@ -119,14 +148,19 @@ class Player:
         conditional_distributions_list_of_lists = []
         for i, number in enumerate(range(1, DICE_SIDES + 1)):
             if self.verbose > 2:
+                if number == 1:
+                    print(f'\n\nPlayer {self.playerID}: {self.hand}')
                 print(
-                    f'{self.playerID}: d = {number}: calls for / calls against = {cumulative_calls_for_list[i]} / {cumulative_calls_against_list[i]} -> prob = {conditional_number_probs[i]}')
+                    f'\tdie = {number}:\n'
+                    f'\t\tCalls for: {cumulative_calls_for_list[i]} (alpha = {alphas[i]})\n'
+                    f'\t\tCalls against: {cumulative_calls_against_list[i]} (beta = {betas[i]})\n'
+                    f'\t\t\t-> p = {conditional_number_probs_st[i]}')
 
             # These are the unconditional probabilities of the unseen dice
             # TODO: still need to standardize
             unconditional_probabilities = [
-                1 - binom.cdf(n=self.num_dice_unseen, p=conditional_number_probs_st[number - 1], k=x) + \
-                binom.pmf(n=self.num_dice_unseen, p=conditional_number_probs_st[number - 1], k=x) \
+                1 - binom.cdf(n=self.num_dice_unseen, p=conditional_number_probs_st[number - 1], k=x) +
+                binom.pmf(n=self.num_dice_unseen, p=conditional_number_probs_st[number - 1], k=x)
                 for x in range(1, self.num_dice_unseen + 1)]
 
             # print(f'unseen probs: {len(unconditional_probabilities)} -> {unconditional_probabilities}')
@@ -135,25 +169,27 @@ class Player:
             #   initialize to -1.0 for those not in your hand (to easily spot an error),
             #   and initialize to 0.0 those that remain, so that the domain is
             #   self.num_dice_unseen + len(self.hand) (i.e. 15 + 5 = 20)
-            conditional_probabilities = [1.0] * (count_in_hand + 1) + \
+
+            conditional_probabilities = [1.0] * (counts_in_hand[i] + 1) + \
                                         [-1.0] * len(unconditional_probabilities) + [0.0] * (
-                                                    len(player_hand) - count_in_hand)
-            for i, prob in enumerate(unconditional_probabilities):
-                if i > self.num_dice_unseen + len(self.hand):
+                                                len(self.hand) - counts_in_hand[i])
+            for ii, prob in enumerate(unconditional_probabilities):
+                if ii > self.num_dice_unseen + len(self.hand):
                     break
-                conditional_probabilities[i + count_in_hand + 1] = unconditional_probabilities[i]
+                conditional_probabilities[ii + counts_in_hand[i] + 1] = unconditional_probabilities[ii]
 
             conditional_distributions_list_of_lists.append(conditional_probabilities)
 
-            # print(f'cond probs: {len(conditional_probabilities)} -> {conditional_probabilities}')
+            if self.verbose >= 3:
+                print(f'\t\t\t\tBeta-modified at least distribution:\n'
+                      f'\t\t\t\t{number} -> {[round(p, 5) for p in conditional_probabilities]}\n'
+                      f'\t\t\t\tv -> {[round(p, 5) for p in self.conditional_dist[i, :]]}')
+
+        # Update self.conditional_dist
+        if use_beta_updating:
+            self.conditional_dist = np.array(conditional_distributions_list_of_lists)
 
         return conditional_distributions_list_of_lists
-
-    # def recalculate_cond_dist(self, cumulative_calls_list: List[int]):
-    #     c = self.calculate_conditional_distributions(cumulative_calls_list=cumulative_calls_list)
-    #     self.conditional_dist = np.array(c)
-    #     self.num_dice_unseen = num_dice_unseen
-    #     self.num_dice_in_game = num_dice_unseen + len(self.hand)
 
     def calculate_cond_dist(self, num_dice_unseen):
         c = get_conditional_distributions(self.hand, num_dice_unseen)
@@ -204,7 +240,9 @@ class Player:
         call_prob, idx = self._get_highest_probability_call(cda_mat)
         if aggressive_start:
             call_prob, idx = self._get_aggressive_start(cda_mat)
-        return {'quantity': idx[1] + 1, 'dice': idx[0] + 1, 'bs': False, 'exactly': False}
+        first_action = {'quantity': idx[1] + 1, 'dice': idx[0] + 1, 'bs': False, 'exactly': False}
+        self.my_calls_this_round[first_action['dice'] - 1] += 1
+        return first_action
 
     def action(self, prev_action=None, plot=False):
         if prev_action == None:
@@ -214,35 +252,16 @@ class Player:
         d = prev_action['dice']
         q = prev_action['quantity']
         cda_mat = self.conditional_dist[:, 1:].copy()  # remove at least 0 col
+
         exa_prob = self.exactly_dist[d - 1, q]  # no column removal
 
         cda_mat = self.exclude_unallowed_calls(cda_mat, prev_q=q, prev_d=d)
-        # if d == 1:
-        #     # here I removed , self.num_dice_in_game, this means if there are only a couple die
-        #     # in the game it would not need to double + 1 which would be a problem theoretically
-        #
-        #     # zero-out un-allowed non-ace calls
-        #     cda_mat[1:, :min(self.num_dice_in_game, q * 2 + 1) - 1] = -1.0
-        #
-        #     # Zero-out un-allowed ace calls
-        #     cda_mat[0, :min(self.num_dice_in_game, q)] = -1.0
-        #
-        # else:
-        #     # If q = 5 and d = 2, i.e. if I call 5 2's, you can still call 5 3's.
-        #     # So, the min quantity the next person can call is still q = 5.
-        #     # This is true unless d = 6, which is the highest number, but that's OK.
-        #
-        #     # Zero out unallowed non-ace calls
-        #     # any non-ace call w/ Q <= q - 1
-        #     cda_mat[1:, :max(min(self.num_dice_in_game, q - 1), 0), ] = -1.0
-        #     # any D <= d w/ Q = q
-        #     cda_mat[1:d, min(self.num_dice_in_game, q - 1)] = -1.0
-        #
-        #     # Zero out unallowed ace calls
-        #     cda_mat[0, :ceil(q / 2) - 1] = -1.0
 
         if self.verbose > 2:
-            print('Probabilities: {}'.format(cda_mat))
+            print('\tProbabilities:')
+            for cda_row_index in range(cda_mat.shape[0]):
+                number = cda_row_index + 1
+                print(f'\t{number} -> {[round(p, 3) for p in cda_mat[cda_row_index, :]]}')
             if plot:
                 plot_distributions(cond_distributions=self.conditional_dist,
                                    player_id=self.playerID)
@@ -269,6 +288,7 @@ class Player:
 
         # evaluate against likely threshold
         if max_prob > self.likely_thres:
+            self.my_calls_this_round[best_action['dice'] - 1] += 1
             return best_action
 
         # check risk threshold
@@ -290,6 +310,7 @@ class Player:
                 return {'quantity': q, 'dice': d, 'bs': False, 'exactly': True}
 
         # else, make highest probability call
+        self.my_calls_this_round[best_action['dice'] - 1] += 1
         return best_action
 
     def exclude_unallowed_calls(self, cda_mat, prev_q, prev_d):
@@ -477,8 +498,8 @@ def get_conditional_distributions(player_hand: List[int], num_dice_unseen: int =
             number_prob = 1 / 3
 
         # These are the unconditional probabilities of the unseen dice
-        unconditional_probabilities = [1 - binom.cdf(n=num_dice_unseen, p=number_prob, k=x) + \
-                                       binom.pmf(n=num_dice_unseen, p=number_prob, k=x) \
+        unconditional_probabilities = [1 - binom.cdf(n=num_dice_unseen, p=number_prob, k=x) +
+                                       binom.pmf(n=num_dice_unseen, p=number_prob, k=x)
                                        for x in range(1, num_dice_unseen + 1)]
 
         # print(f'unseen probs: {len(unconditional_probabilities)} -> {unconditional_probabilities}')
@@ -659,15 +680,35 @@ def update_trustability(player_list, total_dice_left):
             dice_removed_percent = 1 - (total_dice_left / MAX_TOTAL_DICE)
             player.trustability = player.trustability_start * (1 + dice_removed_percent)
 
+def zero_out_round_specific_memory(player_list):
+    """
 
-def runGame(verbose: int = 0):
+    :param player_list:
+    :return:
+    """
+    for player in player_list:
+        if player.player_type == 'Bot':
+            player.my_calls_this_round = [0] * DICE_SIDES
+
+def round_updates(player_list, total_dice_left):
+    """
+
+    :param player_list:
+    :param total_dice_left:
+    :return:
+    """
+    # update_trustability(player_list, total_dice_left)
+    zero_out_round_specific_memory(player_list)
+
+
+def runGame(verbose: int = 0, use_beta_updating=True):
     # instantiate players
     r = 0.35  # risk / bullshit threshold
     l = 0.8  # likely threshold
     e = 0.3  # exactly threshold
-    bt = 0.5  # bluff threshold
+    bt = 0.6  # bluff threshold
     bp = 0.25  # bluff probability
-    trust = 1.0  # trustability
+    trustability = 1.0  # trustability
     player_list = []
     total_dice_left = MAX_TOTAL_DICE
 
@@ -677,25 +718,25 @@ def runGame(verbose: int = 0):
     shuffled_player_types = random.sample(player_types, len(player_types))  # Shuffle player types
     for i, player_type in enumerate(shuffled_player_types):
         if i == 0:
-            trust = 1  # PARAMETER OF INTEREST: trustability
+            trustability = 0  # PARAMETER OF INTEREST: trustability
         elif i == 1:
-            trust = 1.25
+            trustability = 1
         elif i == 2:
-            trust = 1.5
+            trustability = 1.25
         else:
-            trust = 2
+            trustability = 1.75
 
         h = np.random.randint(1, DICE_SIDES + 1, MAX_DICE_PER_PLAYER)
         if player_type == 'BOT':
             # All players have almost the same params
             p = Player(hand=h, risk_thres=r, likely_thres=l, exactly_thres=e, bluff_prob=bp, bluff_thres=bt,
-                       trustability=trust, playerID=i + 1, num_dice_unseen=total_dice_left - h.size,
+                       trustability=trustability, playerID=i + 1, num_dice_unseen=total_dice_left - h.size,
                        verbose=verbose)
             player_metadata.append(
                 [p.playerID, p.risk_thres, p.likely_thres, p.exactly_thres, p.bluff_prob, p.bluff_thres,
                  p.trustability])
         elif player_type == 'HUMAN':
-            p = HumanPlayer(hand=h, playerID=i + 1, trustability=trust, num_dice_unseen=total_dice_left - h.size)
+            p = HumanPlayer(hand=h, playerID=i + 1, trustability=trustability, num_dice_unseen=total_dice_left - h.size)
             player_metadata.append([p.playerID, -1, -1, -1, -1, -1, -1])  # Dummy data for humans
         else:
             # raise ValueError
@@ -711,8 +752,8 @@ def runGame(verbose: int = 0):
     rotated_player_list = player_list
     while len(rotated_player_list) > 1:
         round = round + 1
-        # Update trustability
-        update_trustability(rotated_player_list, total_dice_left)
+        # Update trustability, zero out round-specific memory
+        round_updates(rotated_player_list, total_dice_left)
         # Rotate player list, start with the starting_player_index
         rotated_player_list = rotated_player_list[
                               starting_player_index % len(rotated_player_list):] + rotated_player_list[
@@ -763,7 +804,7 @@ def runGame(verbose: int = 0):
         i = 0
         prev_a = None
         end_round = False
-        number_counter = [0] * 6  # To keep track of what's been said
+        number_counter = [0] * DICE_SIDES  # To keep track of what's been said
         while not end_round:
             # Use % to loop i.e.:
             for index, player in enumerate(rotated_player_list):
@@ -776,9 +817,9 @@ def runGame(verbose: int = 0):
                 index_current = index
 
                 if verbose:
-                    print(f'\nPlayer ID: {player.playerID}')
+                    print(f'{Color.BOLD}\nPlayer ID: {player.playerID}{Color.END}')
                 if player.player_type == 'Human':
-                    print('Hand: {}'.format(player.hand))
+                    print(f'{Color.BOLD}Hand: {player.hand}{Color.END}')
                     a = player.action(prev_a, plot=False)
                 else:
                     a = player.action(prev_a, plot=False)
@@ -790,11 +831,11 @@ def runGame(verbose: int = 0):
 
                 if verbose:
                     if a['bs']:  # If called Bullshit
-                        print("Turn {}: DUDO".format(i))
+                        print(f"{Color.BOLD}Turn {i}: DUDO{Color.END}\n")
                     elif a['exactly']:  # If called Exactly
-                        print("Turn {}: EXACTLY".format(i))
+                        print(f"{Color.BOLD}Turn {i}: EXACTLY{Color.END}\n")
                     else:
-                        print("Turn {}: {} {}s".format(i, str(a['quantity']), str(a['dice'])))
+                        print(f"{Color.BOLD}Turn {i}: {a['quantity']} {a['dice']}s{Color.END}\n")
 
                 i += 1
 
@@ -812,8 +853,10 @@ def runGame(verbose: int = 0):
 
                 number_counter[a['dice'] - 1] += 1
                 for other_player in rotated_player_list:
-                    if other_player == player: continue
-                    other_player.calculate_conditional_distributions(cumulative_calls_list=number_counter)
+                    if other_player == player or other_player.player_type == 'Human':
+                        continue
+                    other_player.calculate_conditional_distributions(cumulative_calls_list=number_counter,
+                                                                     use_beta_updating=use_beta_updating)
 
             end_round = a['bs'] | a['exactly']
 
@@ -907,7 +950,7 @@ if __name__ == '__main__':
             ['player_id', 'risk_thres', 'likely_thres', 'exactly_thres', 'bluff_prob', 'bluff_thres', 'trustability',
              'win_bool'])
         for i, games in enumerate(range(max_games)):
-            game_metadata = runGame(verbose=1)
+            game_metadata = runGame(verbose=3)
             gameWin = game_metadata["game_playerid_winner"]
             player_metadata = game_metadata["player_metadata"]
             if i % 10 == 0:
