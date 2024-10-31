@@ -13,8 +13,8 @@ from datetime import datetime
 import csv
 
 # Set global variables
-NUM_HUMANS = 1
-NUM_BOTS = 3
+NUM_HUMANS = 0
+NUM_BOTS = 4
 NUM_PLAYERS = NUM_HUMANS + NUM_BOTS
 MAX_DICE_PER_PLAYER = 5
 MAX_TOTAL_DICE = NUM_PLAYERS * MAX_DICE_PER_PLAYER
@@ -941,28 +941,26 @@ def runGame(verbose: int = 0, use_beta_updating=True):
 
 if __name__ == '__main__':
     winners = []
-    max_games = 1
+    max_games = 30
     file_name = 'simulation_results/cacho_{}.csv'.format(datetime.now().strftime("%d%m%Y%H%M%S"))
     with open(file_name, 'w', newline='') as csvfile:
         print('Saving results to: {}'.format(file_name))
         csvwriter = csv.writer(csvfile, delimiter=',')
         csvwriter.writerow(
-            ['player_id', 'risk_thres', 'likely_thres', 'exactly_thres', 'bluff_prob', 'bluff_thres', 'trustability',
+            ['game_iter', 'player_id', 'risk_thres', 'likely_thres', 'exactly_thres', 'bluff_prob', 'bluff_thres', 'trustability',
              'win_bool'])
         for i, games in enumerate(range(max_games)):
-            game_metadata = runGame(verbose=3)
+            game_metadata = runGame(verbose=0)
             gameWin = game_metadata["game_playerid_winner"]
             player_metadata = game_metadata["player_metadata"]
             if i % 10 == 0:
                 print(f'({i + 1}/{max_games}) PLAYER {gameWin} WINS')
-            for i, specific_player_metadata in enumerate(player_metadata):
+            for ii, specific_player_metadata in enumerate(player_metadata):
                 if specific_player_metadata[0] == game_metadata["game_playerid_winner"]:
-                    player_row = specific_player_metadata
-                    player_row.extend([1])  # Add win
+                    player_row = [i + 1] + specific_player_metadata + [1]  # Add game_iter and win_bool
                     csvwriter.writerow(player_row)
                 else:
-                    player_row = specific_player_metadata
-                    player_row.extend([0])  # Add lose
+                    player_row = [i + 1] + specific_player_metadata + [0]  # Add game_iter and win_bool
                     csvwriter.writerow(player_row)
-        winners.append(gameWin)
-        Counter(winners)
+            winners.append(gameWin)
+        print(Counter(winners))
