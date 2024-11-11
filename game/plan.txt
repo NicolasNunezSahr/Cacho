@@ -16,3 +16,8 @@ There are a few ideas I want to explore in the game of Cacho:
     Player 1 said it. For this reason, we added a steadily increasing trustability as the game nears the end. Is a
     steadily increasing trustability helpful in the end game? Or is it a better idea to drop the bullshit threshold?
 4. Reinforcement learning bot: Q Learning?
+5. If I want to play Cacho with a friend, but there's only 2 of us, its not so fun. I'd like to be able to add 2 more
+   bots to the game using one or two cellphones i.e. possibly having more than 1 bot per cellphone. In other words,
+   both humans have physical dice, and the bots have digital dice. The bots should be able to pick up what the humans
+   are calling verbally, and respond accordingly in speech.
+6. Present the best calls for each user in a visual way.
