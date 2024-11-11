@@ -1,0 +1,18 @@
+There are a few ideas I want to explore in the game of Cacho:
+1. I want to know if using the Beta updating rule helps user win. If so, what should the trustability parameter be. As
+    an added bonus: if we increase the bullshit prob and bullshit threshold, does the optimal trustability parameter
+    drop? How are these related?
+2. I want to know what the gap is between the conditional probability of the call that the bullshitter made, and the
+    conditional probability of the call for the bullshit caller.  I'd like to know the distribution of this quantity.
+    Additionally, I'd like to know the distribution of the conditional probability of the call that the bullshitter
+    made (not the gap, but the actual value). Since the conditional probabilities are affected by beta-updating,
+    I'd like to understand what these quantities look like both when there is beta updating and when there is not.
+    Finally, I'd like to see the distribution of these quantities when the bullshit caller lost a die (i.e. the
+    bullshitter was not actually a bullshitter), and when the bullshitter lost a die (i.e. the bullshit caller was
+    right).
+3. I have a hypothesis that the Bots are worse at playing the end game, because with few dice many calls are unlikely,
+    i.e. If 2 players have 1 die each: Player 1 has a 3 and Player 2 has a 2. Player 1 starts with 1 3. Player 2
+    thinks the probability of this event is 0.33, which is low, when actually it is more likely than that now that
+    Player 1 said it. For this reason, we added a steadily increasing trustability as the game nears the end. Is a
+    steadily increasing trustability helpful in the end game? Or is it a better idea to drop the bullshit threshold?
+4. Reinforcement learning bot: Q Learning?
