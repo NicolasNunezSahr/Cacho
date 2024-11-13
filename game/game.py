@@ -13,8 +13,8 @@ from datetime import datetime
 import csv
 
 # Set global variables
-NUM_HUMANS = 0
-NUM_BOTS = 4
+NUM_HUMANS = 1
+NUM_BOTS = 3
 NUM_PLAYERS = NUM_HUMANS + NUM_BOTS
 MAX_DICE_PER_PLAYER = 5
 MAX_TOTAL_DICE = NUM_PLAYERS * MAX_DICE_PER_PLAYER
@@ -941,7 +941,7 @@ def runGame(verbose: int = 0, use_beta_updating=True):
 
 if __name__ == '__main__':
     winners = []
-    max_games = 30
+    max_games = 1
     file_name = 'simulation_results/cacho_{}.csv'.format(datetime.now().strftime("%d%m%Y%H%M%S"))
     with open(file_name, 'w', newline='') as csvfile:
         print('Saving results to: {}'.format(file_name))
@@ -950,7 +950,7 @@ if __name__ == '__main__':
             ['game_iter', 'player_id', 'risk_thres', 'likely_thres', 'exactly_thres', 'bluff_prob', 'bluff_thres', 'trustability',
              'win_bool'])
         for i, games in enumerate(range(max_games)):
-            game_metadata = runGame(verbose=0)
+            game_metadata = runGame(verbose=1, use_beta_updating=False)
             gameWin = game_metadata["game_playerid_winner"]
             player_metadata = game_metadata["player_metadata"]
             if i % 10 == 0:
