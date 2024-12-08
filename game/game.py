@@ -94,7 +94,7 @@ class Player:
             print(f'Player ID: {self.playerID}\n'
                   f'\tCumulative calls list: {cumulative_calls_list}\n'
                   f'\tMy calls this round list: {self.my_calls_this_round}\n'
-                  f'\tCalls of others list: {cumulative_calls_of_others_list}')
+                  f'\tCalls of others list: {cumulative_calls_of_others_list}\n')
 
         counts_of_numbers = Counter(self.hand)
         conditional_number_probs = []
@@ -134,6 +134,9 @@ class Player:
             cumulative_calls_against_list.append(cumulative_calls_against)
             alpha = (self.num_dice_unseen * number_prob) + (self.trustability * cumulative_calls_for)
             beta = self.num_dice_unseen * (1 - number_prob) + (self.trustability * cumulative_calls_against)
+            if self.verbose > 4:
+                print(f'\t{number} = Alpha = {alpha} = ({self.num_dice_unseen} * {number_prob}) + ({self.trustability} * {cumulative_calls_for})')
+                print(f'\t{number} = Beta = {beta} = ({self.num_dice_unseen} * {1 - number_prob}) + ({self.trustability} * {cumulative_calls_against})')
             conditional_number_prob = alpha / (alpha + beta)
             alphas.append(alpha)
             betas.append(beta)
@@ -144,7 +147,16 @@ class Player:
         # sum_to_one = np.sum([prob for prob in conditional_number_probs])
         # conditional_number_probs_st = np.divide(conditional_number_probs,
         #                                         np.sum(conditional_number_probs) / ((1/6) + (5 * (1/3))))
-        conditional_number_probs_st = conditional_number_probs
+        # Standardization
+        # Standardize by dividing by P(2) + P(3) + P(4) + P(5) + P(6) - 4*P(1).
+        # The formula is as follows because P(1) + P(2 & !1) + P(3 & !1) + P(4 & !1) + P(5 & !1) + P(6 & !1) =
+        # 1 = P(1) + (P(2) - P(1)) + (P(3) - P(1)) + (P(4) - P(1)) + (P(5) - P(1)) + (P(6) - P(1)) = 1 =
+        # P(1) - 5*P(1) + sum([P(i) for i in [2, 3, 4, 5, 6]) = sum([P(i) for i in [2, 3, 4, 5, 6]) - 4*P(1) = 1
+        standardization_denominator = sum(conditional_number_probs[1:]) - 4*conditional_number_probs[0]
+        conditional_number_probs_st = np.divide(conditional_number_probs, standardization_denominator)
+        if self.verbose > 2:
+            print(f'\n\tStandardizing probs: ({conditional_number_probs} / {standardization_denominator}) = '
+                  f'{conditional_number_probs_st}')
         conditional_distributions_list_of_lists = []
         for i, number in enumerate(range(1, DICE_SIDES + 1)):
             if self.verbose > 2:
@@ -156,8 +168,7 @@ class Player:
                     f'\t\tCalls against: {cumulative_calls_against_list[i]} (beta = {betas[i]})\n'
                     f'\t\t\t-> p = {conditional_number_probs_st[i]}')
 
-            # These are the unconditional probabilities of the unseen dice
-            # TODO: still need to standardize
+            # These are the unconditional probabilities of the unseen dice (not conditional on my hand)
             unconditional_probabilities = [
                 1 - binom.cdf(n=self.num_dice_unseen, p=conditional_number_probs_st[number - 1], k=x) +
                 binom.pmf(n=self.num_dice_unseen, p=conditional_number_probs_st[number - 1], k=x)
@@ -950,7 +961,7 @@ if __name__ == '__main__':
             ['game_iter', 'player_id', 'risk_thres', 'likely_thres', 'exactly_thres', 'bluff_prob', 'bluff_thres', 'trustability',
              'win_bool'])
         for i, games in enumerate(range(max_games)):
-            game_metadata = runGame(verbose=1, use_beta_updating=False)
+            game_metadata = runGame(verbose=5, use_beta_updating=True)
             gameWin = game_metadata["game_playerid_winner"]
             player_metadata = game_metadata["player_metadata"]
             if i % 10 == 0:
