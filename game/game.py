@@ -91,10 +91,10 @@ class Player:
         cumulative_calls_of_others_list = [cumulative_calls_list[i] - self.my_calls_this_round[i]
                                            for i, die in enumerate(cumulative_calls_list)]
         if self.verbose > 2:
-            print(f'Player ID: {self.playerID}\n'
-                  f'\tCumulative calls list: {cumulative_calls_list}\n'
-                  f'\tMy calls this round list: {self.my_calls_this_round}\n'
-                  f'\tCalls of others list: {cumulative_calls_of_others_list}\n')
+            print(f'\tPlayer ID: {self.playerID}\n'
+                  f'\t\tCumulative calls list: {cumulative_calls_list}\n'
+                  f'\t\tMy calls this round list: {self.my_calls_this_round}\n'
+                  f'\t\tCalls of others list: {cumulative_calls_of_others_list}\n')
 
         counts_of_numbers = Counter(self.hand)
         conditional_number_probs = []
@@ -135,8 +135,8 @@ class Player:
             alpha = (self.num_dice_unseen * number_prob) + (self.trustability * cumulative_calls_for)
             beta = self.num_dice_unseen * (1 - number_prob) + (self.trustability * cumulative_calls_against)
             if self.verbose > 4:
-                print(f'\t{number} = Alpha = {alpha} = ({self.num_dice_unseen} * {number_prob}) + ({self.trustability} * {cumulative_calls_for})')
-                print(f'\t{number} = Beta = {beta} = ({self.num_dice_unseen} * {1 - number_prob}) + ({self.trustability} * {cumulative_calls_against})')
+                print(f'\t\t{number} = Alpha = {alpha} = ({self.num_dice_unseen} * {number_prob}) + ({self.trustability} * {cumulative_calls_for})')
+                print(f'\t\t{number} = Beta = {beta} = ({self.num_dice_unseen} * {1 - number_prob}) + ({self.trustability} * {cumulative_calls_against})')
             conditional_number_prob = alpha / (alpha + beta)
             alphas.append(alpha)
             betas.append(beta)
@@ -155,18 +155,18 @@ class Player:
         standardization_denominator = sum(conditional_number_probs[1:]) - 4*conditional_number_probs[0]
         conditional_number_probs_st = np.divide(conditional_number_probs, standardization_denominator)
         if self.verbose > 2:
-            print(f'\n\tStandardizing probs: ({conditional_number_probs} / {standardization_denominator}) = '
+            print(f'\n\t\tStandardizing probs: ({conditional_number_probs} / {standardization_denominator}) = '
                   f'{conditional_number_probs_st}')
         conditional_distributions_list_of_lists = []
         for i, number in enumerate(range(1, DICE_SIDES + 1)):
             if self.verbose > 2:
                 if number == 1:
-                    print(f'\n\nPlayer {self.playerID}: {self.hand}')
+                    print(f'\n\n\tPlayer {self.playerID}: {self.hand}')
                 print(
-                    f'\tdie = {number}:\n'
-                    f'\t\tCalls for: {cumulative_calls_for_list[i]} (alpha = {alphas[i]})\n'
-                    f'\t\tCalls against: {cumulative_calls_against_list[i]} (beta = {betas[i]})\n'
-                    f'\t\t\t-> p = {conditional_number_probs_st[i]}')
+                    f'\t\tdie = {number}:\n'
+                    f'\t\t\tCalls for: {cumulative_calls_for_list[i]} (alpha = {alphas[i]})\n'
+                    f'\t\t\tCalls against: {cumulative_calls_against_list[i]} (beta = {betas[i]})\n'
+                    f'\t\t\t\t-> p = {conditional_number_probs_st[i]}')
 
             # These are the unconditional probabilities of the unseen dice (not conditional on my hand)
             unconditional_probabilities = [
@@ -192,9 +192,9 @@ class Player:
             conditional_distributions_list_of_lists.append(conditional_probabilities)
 
             if self.verbose >= 3:
-                print(f'\t\t\t\tBeta-modified at least distribution:\n'
-                      f'\t\t\t\t{number} -> {[round(p, 5) for p in conditional_probabilities]}\n'
-                      f'\t\t\t\tv -> {[round(p, 5) for p in self.conditional_dist[i, :]]}')
+                print(f'\t\t\t\t\tBeta-modified at least distribution:\n'
+                      f'\t\t\t\t\t{number} -> {[round(p, 5) for p in conditional_probabilities]}\n'
+                      f'\t\t\t\t\tv -> {[round(p, 5) for p in self.conditional_dist[i, :]]}')
 
         # Update self.conditional_dist
         if use_beta_updating:
@@ -218,6 +218,24 @@ class Player:
         idx_flat = np.argmax(m)
         idx = np.unravel_index(idx_flat, m.shape)
         return max_prob, idx
+
+    def _get_highest_probability_calls(self, m, num_calls=5):
+        flat_indices = np.argpartition(m.ravel(), -num_calls)[-num_calls:]
+        values = m.ravel()[flat_indices]
+
+        # Sort the values and indices in descending order
+        sorted_indices = np.argsort(-values)
+        values = values[sorted_indices]
+        flat_indices = flat_indices[sorted_indices]
+
+        # Convert flat indices to 2D indices
+        indices_2d = np.unravel_index(flat_indices, m.shape)
+
+        # Combine values and indices into list of tuples
+        result = [(float(val), (int(row), int(col)))
+                  for val, row, col in zip(values, indices_2d[0], indices_2d[1])]
+
+        return result
 
     def _get_aggressive_start(self, m):
         mask = m > 0.63
@@ -470,8 +488,10 @@ class HumanPlayer(Player):
             cda_mat = self.exclude_unallowed_calls(cda_mat, prev_q=q, prev_d=d)
 
         # find highest probability call
-        max_prob, idx = self._get_highest_probability_call(cda_mat)
-        print(f'Highest Probability Action:\tProbability of at least {idx[1] + 1} {idx[0] + 1}\'s: {max_prob}')
+        results = self._get_highest_probability_calls(cda_mat, num_calls=5)
+        print('Highest Probability Actions:')
+        for i, (prob, idx) in enumerate(results):
+            print(f'\t({i+1}) Probability of at least {idx[1] + 1} {idx[0] + 1}\'s: {prob}')
 
     def calculate_cond_dist(self, num_dice_unseen):
         c = get_conditional_distributions(self.hand, num_dice_unseen)
@@ -717,7 +737,7 @@ def runGame(verbose: int = 0, use_beta_updating=True):
     r = 0.35  # risk / bullshit threshold
     l = 0.8  # likely threshold
     e = 0.3  # exactly threshold
-    bt = 0.6  # bluff threshold
+    bt = 0.65  # bluff threshold
     bp = 0.25  # bluff probability
     trustability = 1.0  # trustability
     player_list = []
@@ -961,7 +981,7 @@ if __name__ == '__main__':
             ['game_iter', 'player_id', 'risk_thres', 'likely_thres', 'exactly_thres', 'bluff_prob', 'bluff_thres', 'trustability',
              'win_bool'])
         for i, games in enumerate(range(max_games)):
-            game_metadata = runGame(verbose=5, use_beta_updating=True)
+            game_metadata = runGame(verbose=1, use_beta_updating=True)
             gameWin = game_metadata["game_playerid_winner"]
             player_metadata = game_metadata["player_metadata"]
             if i % 10 == 0:
