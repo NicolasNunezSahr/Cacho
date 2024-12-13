@@ -973,29 +973,31 @@ def runGame(verbose: int = 0, use_beta_updating=True):
 if __name__ == '__main__':
     winners = []
     max_games = 1
-    save_to_file = False
     file_name = 'simulation_results/cacho_{}.csv'.format(datetime.now().strftime("%d%m%Y%H%M%S"))
-    with open(file_name, 'w', newline='') as csvfile:
+    csv_writer_list_of_lists = []
+    save_to_file = False
+    if save_to_file:
         print('Saving results to: {}'.format(file_name))
-        if save_to_file:
+        csv_writer_list_of_lists.append(['game_iter', 'player_id', 'risk_thres', 'likely_thres', 'exactly_thres',
+                                         'bluff_prob', 'bluff_thres', 'trustability', 'win_bool'])
+    for i, games in enumerate(range(max_games)):
+        game_metadata = runGame(verbose=1, use_beta_updating=True)
+        gameWin = game_metadata["game_playerid_winner"]
+        player_metadata = game_metadata["player_metadata"]
+        if i % 10 == 0:
+            print(f'({i + 1}/{max_games}) PLAYER {gameWin} WINS')
+        for ii, specific_player_metadata in enumerate(player_metadata):
+            if specific_player_metadata[0] == game_metadata["game_playerid_winner"]:
+                player_row = [i + 1] + specific_player_metadata + [1]  # Add game_iter and win_bool
+            else:
+                player_row = [i + 1] + specific_player_metadata + [0]  # Add game_iter and win_bool
+            if save_to_file:
+                csv_writer_list_of_lists.append(player_row)
+        winners.append(gameWin)
+    print(Counter(winners))
+
+    if save_to_file:
+        with open(file_name, 'w', newline='') as csvfile:
             csvwriter = csv.writer(csvfile, delimiter=',')
-            csvwriter.writerow(
-                ['game_iter', 'player_id', 'risk_thres', 'likely_thres', 'exactly_thres', 'bluff_prob', 'bluff_thres', 'trustability',
-                 'win_bool'])
-        for i, games in enumerate(range(max_games)):
-            game_metadata = runGame(verbose=1, use_beta_updating=True)
-            gameWin = game_metadata["game_playerid_winner"]
-            player_metadata = game_metadata["player_metadata"]
-            if i % 10 == 0:
-                print(f'({i + 1}/{max_games}) PLAYER {gameWin} WINS')
-            for ii, specific_player_metadata in enumerate(player_metadata):
-                if specific_player_metadata[0] == game_metadata["game_playerid_winner"]:
-                    player_row = [i + 1] + specific_player_metadata + [1]  # Add game_iter and win_bool
-                    if save_to_file:
-                        csvwriter.writerow(player_row)
-                else:
-                    player_row = [i + 1] + specific_player_metadata + [0]  # Add game_iter and win_bool
-                    if save_to_file:
-                        csvwriter.writerow(player_row)
-            winners.append(gameWin)
-        print(Counter(winners))
+            for row in csv_writer_list_of_lists:
+                csvwriter.writerow(row)
