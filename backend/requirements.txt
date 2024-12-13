@@ -1,0 +1,6 @@
+numpy
+scipy
+matplotlib
+fastapi
+uvicorn
+websockets

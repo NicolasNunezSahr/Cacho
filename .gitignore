@@ -3,16 +3,21 @@ __pycache__/
 *.py[cod]
 
 # Virtual environment
-venv/Lib/
-venv/Scripts/
-venv/pyvenv.cfg
-venv/pip-selfcheck.json
-venv/share/
+cacho_venv/
+.env
 
-# Keep these virtual environment directories
-!venv/
-!venv/.gitkeep
+# React
+frontend/node_modules/
+frontend/build/
+frontend/.env.local
+frontend/.env.development.local
+frontend/.env.test.local
+frontend/.env.production.local
+frontend/npm-debug.log*
+frontend/yarn-debug.log*
+frontend/yarn-error.log*
 
+# Mac/IDE files
 .DS_store
 .idea/
 

@@ -392,7 +392,7 @@ class HumanPlayer(Player):
         invalid_call = True
         action = None
         while invalid_call:
-            player_call = input('Play Format: \{quantity\} \{number\} OR \'bs\' OR \'exactly\':    ')
+            player_call = input('Play Format: {quantity} {number} OR \'bs\' OR \'exactly\':    ')
             if prev_action is not None:  # Not first play
                 if player_call == 'bs':  # BS
                     invalid_call = False
@@ -973,13 +973,15 @@ def runGame(verbose: int = 0, use_beta_updating=True):
 if __name__ == '__main__':
     winners = []
     max_games = 1
+    save_to_file = False
     file_name = 'simulation_results/cacho_{}.csv'.format(datetime.now().strftime("%d%m%Y%H%M%S"))
     with open(file_name, 'w', newline='') as csvfile:
         print('Saving results to: {}'.format(file_name))
-        csvwriter = csv.writer(csvfile, delimiter=',')
-        csvwriter.writerow(
-            ['game_iter', 'player_id', 'risk_thres', 'likely_thres', 'exactly_thres', 'bluff_prob', 'bluff_thres', 'trustability',
-             'win_bool'])
+        if save_to_file:
+            csvwriter = csv.writer(csvfile, delimiter=',')
+            csvwriter.writerow(
+                ['game_iter', 'player_id', 'risk_thres', 'likely_thres', 'exactly_thres', 'bluff_prob', 'bluff_thres', 'trustability',
+                 'win_bool'])
         for i, games in enumerate(range(max_games)):
             game_metadata = runGame(verbose=1, use_beta_updating=True)
             gameWin = game_metadata["game_playerid_winner"]
@@ -989,9 +991,11 @@ if __name__ == '__main__':
             for ii, specific_player_metadata in enumerate(player_metadata):
                 if specific_player_metadata[0] == game_metadata["game_playerid_winner"]:
                     player_row = [i + 1] + specific_player_metadata + [1]  # Add game_iter and win_bool
-                    csvwriter.writerow(player_row)
+                    if save_to_file:
+                        csvwriter.writerow(player_row)
                 else:
                     player_row = [i + 1] + specific_player_metadata + [0]  # Add game_iter and win_bool
-                    csvwriter.writerow(player_row)
+                    if save_to_file:
+                        csvwriter.writerow(player_row)
             winners.append(gameWin)
         print(Counter(winners))
