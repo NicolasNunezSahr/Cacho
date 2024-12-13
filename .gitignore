@@ -1,0 +1,18 @@
+# Python
+__pycache__/
+*.py[cod]
+
+# Virtual environment
+venv/Lib/
+venv/Scripts/
+venv/pyvenv.cfg
+venv/pip-selfcheck.json
+venv/share/
+
+# Keep these virtual environment directories
+!venv/
+!venv/.gitkeep
+
+.DS_store
+.idea/
+
