@@ -871,13 +871,11 @@ def runGame(verbose: int = 0, use_beta_updating=True):
                 i += 1
 
                 # user_enter = input('Enter to continue: ')
-                if a['bs'] == True:
-                    end_round = True
+                if a['bs'] is True:
                     last_play = a
                     bullshit_caller_player_list_index = index
                     break
-                if a['exactly'] == True:
-                    end_round = True
+                if a['exactly'] is True:
                     last_play = a
                     exactly_caller_player_list_index = index
                     break
@@ -910,7 +908,7 @@ def runGame(verbose: int = 0, use_beta_updating=True):
             player_bullshit_called_on = rotated_player_list[
                 (bullshit_caller_player_list_index - 1) % len(rotated_player_list)]
 
-            if total_count < last_play['quantity'] and player_bullshit_called_on != None:
+            if total_count < last_play['quantity'] and player_bullshit_called_on is not None:
                 rotated_player_list[previous_index].hand = rotated_player_list[previous_index].hand[1:]
                 if verbose:
                     print(
@@ -933,13 +931,15 @@ def runGame(verbose: int = 0, use_beta_updating=True):
                 dice_counts[1])
 
             if total_count == last_play['quantity']:
+                if verbose:
+                    print(f'{total_count} {last_play["dice"]}s total == Player '
+                          f'{rotated_player_list[index_current].playerID}\'s exactly bet of '
+                          f'{last_play["quantity"]} {last_play["dice"]}s')
                 if len(rotated_player_list[index_current].hand) < 5:
                     rotated_player_list[index_current].hand = np.append(rotated_player_list[index_current].hand,
                                                                         0)  # Add a die
                     total_dice_left = total_dice_left + 1
                     if verbose:
-                        print(
-                            f'{total_count} {last_play["dice"]}s total == Player {rotated_player_list[index_current].playerID}\'s exactly bet of {last_play["quantity"]} {last_play["dice"]}s')
                         print(f'Player {rotated_player_list[index_current].playerID} wins a die')
                     starting_player_index = index_current
                 else:
