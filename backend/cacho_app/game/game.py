@@ -981,7 +981,7 @@ if __name__ == '__main__':
         csv_writer_list_of_lists.append(['game_iter', 'player_id', 'risk_thres', 'likely_thres', 'exactly_thres',
                                          'bluff_prob', 'bluff_thres', 'trustability', 'win_bool'])
     for i, games in enumerate(range(max_games)):
-        game_metadata = runGame(verbose=1, use_beta_updating=True)
+        game_metadata = runGame(verbose=2, use_beta_updating=True)
         gameWin = game_metadata["game_playerid_winner"]
         player_metadata = game_metadata["player_metadata"]
         if i % 10 == 0:

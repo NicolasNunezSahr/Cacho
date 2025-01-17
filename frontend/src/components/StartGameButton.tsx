@@ -15,7 +15,23 @@ const StartGameButton = () => {
         `http://localhost:8000/startgame/numberOfPlayers=${numberOfPlayers}startingDice=${startingDice}`
       );
       const data = await response.json();
-      return data.all_hands;
+      let player_metadata;
+      if (data['player_metadata']) {
+        player_metadata = data.player_metadata
+      } else {
+        player_metadata = []
+      }
+      const hands: number[][] = [];
+      const playerCount = player_metadata.player_count;
+      console.log('Player count: ', playerCount)
+      for (let i = 1; i <= playerCount; i++) {
+        const playerKey = `player_${i}`;
+        if (player_metadata[playerKey] && player_metadata[playerKey].hand) {
+          hands.push(player_metadata[playerKey].hand);
+        }
+      }
+      console.log(hands)
+      return hands;
     } catch (error) {
       console.error('Error:', error);
       return [];
